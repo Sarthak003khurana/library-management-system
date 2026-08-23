@@ -1,0 +1,24 @@
+{
+  "name": "library-resource-management-system",
+  "version": "1.0.0",
+  "description": "Library & Lab Equipment Booking System with Role-Based Access",
+  "main": "server/server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server/server.js",
+    "dev": "node --watch server/server.js",
+    "seed": "node server/data/seed.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "dotenv": "^16.4.7",
+    "express": "^4.19.2",
+    "firebase": "^12.17.1",
+    "firebase-admin": "^13.5.0",
+    "jsonwebtoken": "^9.0.2",
+    "nodemailer": "^9.0.5"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

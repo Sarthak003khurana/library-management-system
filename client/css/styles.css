@@ -1,0 +1,1062 @@
+/* ============================================================
+   RESOURCEHUB — TACTILE UI DESIGN SYSTEM
+   Inspired by the supplied Google Stitch design
+   ============================================================ */
+
+
+/* ============================================================
+   1. ROOT DESIGN TOKENS
+   ============================================================ */
+
+:root {
+
+  /* ----------------------------------------
+     Main colors
+     ---------------------------------------- */
+
+  --rh-primary: #4648d4;
+  --rh-primary-dark: #3638b8;
+  --rh-secondary: #8127cf;
+
+  --rh-bg: #f8f9ff;
+  --rh-surface: #ffffff;
+
+  --rh-text: #161629;
+  --rh-text-muted: #64748b;
+
+  --rh-border: #e5e7f2;
+
+  /* ----------------------------------------
+     Tactile shadows
+     ---------------------------------------- */
+
+  --rh-shadow:
+    0 18px 35px rgba(70, 72, 212, 0.08),
+    0 5px 12px rgba(15, 23, 42, 0.06);
+
+  --rh-shadow-hover:
+    0 24px 45px rgba(70, 72, 212, 0.12),
+    0 8px 18px rgba(15, 23, 42, 0.08);
+
+  --rh-shadow-pressed:
+    0 4px 8px rgba(15, 23, 42, 0.08);
+
+  --rh-inset:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    inset 0 -1px 0 rgba(15, 23, 42, 0.03);
+
+  /* ----------------------------------------
+     Radius
+     ---------------------------------------- */
+
+  --rh-radius-sm: 12px;
+  --rh-radius-md: 16px;
+  --rh-radius-lg: 20px;
+  --rh-radius-xl: 24px;
+
+  /* ----------------------------------------
+     Transitions
+     ---------------------------------------- */
+
+  --rh-transition:
+    180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+
+}
+
+
+/* ============================================================
+   2. GLOBAL RESET
+   ============================================================ */
+
+html {
+
+  scroll-behavior: smooth;
+
+}
+
+
+body {
+
+  background:
+    radial-gradient(
+      circle at 15% 10%,
+      rgba(129, 39, 207, 0.06),
+      transparent 30%
+    ),
+    radial-gradient(
+      circle at 85% 20%,
+      rgba(70, 72, 212, 0.07),
+      transparent 32%
+    ),
+    var(--rh-bg);
+
+  color: var(--rh-text);
+
+  font-family:
+    "Geist",
+    "Inter",
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+
+  min-height: 100vh;
+
+}
+
+
+/* ============================================================
+   3. TEXT SELECTION
+   ============================================================ */
+
+::selection {
+
+  background: rgba(70, 72, 212, 0.18);
+
+  color: var(--rh-text);
+
+}
+
+
+/* ============================================================
+   4. SCROLLBAR
+   ============================================================ */
+
+::-webkit-scrollbar {
+
+  width: 9px;
+
+  height: 9px;
+
+}
+
+
+::-webkit-scrollbar-track {
+
+  background: transparent;
+
+}
+
+
+::-webkit-scrollbar-thumb {
+
+  background:
+    linear-gradient(
+      180deg,
+      #bfc2ef,
+      #aeb1dc
+    );
+
+  border-radius: 999px;
+
+  border: 2px solid transparent;
+
+  background-clip: padding-box;
+
+}
+
+
+::-webkit-scrollbar-thumb:hover {
+
+  background:
+    linear-gradient(
+      180deg,
+      #989be2,
+      #8588d2
+    );
+
+  border: 2px solid transparent;
+
+  background-clip: padding-box;
+
+}
+
+
+/* ============================================================
+   5. DARK MODE
+   ============================================================ */
+
+.dark {
+
+  --rh-bg: #111222;
+
+  --rh-surface: #1a1b2d;
+
+  --rh-text: #f5f5ff;
+
+  --rh-text-muted: #9ca3b8;
+
+  --rh-border: #2c2e45;
+
+  --rh-shadow:
+    0 18px 35px rgba(0, 0, 0, 0.22),
+    0 5px 12px rgba(0, 0, 0, 0.18);
+
+  --rh-shadow-hover:
+    0 24px 45px rgba(0, 0, 0, 0.30),
+    0 8px 18px rgba(0, 0, 0, 0.20);
+
+}
+
+
+.dark body {
+
+  background:
+    radial-gradient(
+      circle at 15% 10%,
+      rgba(129, 39, 207, 0.10),
+      transparent 30%
+    ),
+    radial-gradient(
+      circle at 85% 20%,
+      rgba(70, 72, 212, 0.10),
+      transparent 32%
+    ),
+    #111222;
+
+}
+
+
+/* ============================================================
+   6. TACTILE CARDS
+   ============================================================ */
+
+.rh-card {
+
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.98),
+      rgba(255, 255, 255, 0.94)
+    );
+
+  border:
+
+    1px solid var(--rh-border);
+
+  border-radius:
+    var(--rh-radius-lg);
+
+  box-shadow:
+    var(--rh-shadow),
+    var(--rh-inset);
+
+  transition:
+    transform var(--rh-transition),
+    box-shadow var(--rh-transition);
+
+}
+
+
+.rh-card:hover {
+
+  transform:
+    translateY(-4px);
+
+  box-shadow:
+    var(--rh-shadow-hover),
+    var(--rh-inset);
+
+}
+
+
+.dark .rh-card {
+
+  background:
+    linear-gradient(
+      180deg,
+      rgba(30, 31, 49, 0.98),
+      rgba(25, 26, 42, 0.98)
+    );
+
+}
+
+
+/* ============================================================
+   7. TACTILE BUTTONS
+   ============================================================ */
+
+.rh-btn {
+
+  position: relative;
+
+  display: inline-flex;
+
+  align-items: center;
+
+  justify-content: center;
+
+  gap: 8px;
+
+  min-height: 42px;
+
+  padding:
+    10px 18px;
+
+  border-radius:
+    var(--rh-radius-md);
+
+  border:
+    1px solid rgba(70, 72, 212, 0.18);
+
+  background:
+    linear-gradient(
+      135deg,
+      var(--rh-primary),
+      var(--rh-secondary)
+    );
+
+  color: white;
+
+  font-weight: 600;
+
+  box-shadow:
+    0 8px 18px rgba(70, 72, 212, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+
+  cursor: pointer;
+
+  transition:
+    transform var(--rh-transition),
+    box-shadow var(--rh-transition),
+    filter var(--rh-transition);
+
+}
+
+
+.rh-btn:hover {
+
+  transform:
+    translateY(-3px);
+
+  box-shadow:
+    0 13px 25px rgba(70, 72, 212, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.30);
+
+  filter:
+    brightness(1.03);
+
+}
+
+
+.rh-btn:active {
+
+  transform:
+    translateY(1px);
+
+  box-shadow:
+    var(--rh-shadow-pressed);
+
+}
+
+
+.rh-btn:disabled {
+
+  opacity: 0.55;
+
+  cursor: not-allowed;
+
+  transform: none;
+
+}
+
+
+/* ============================================================
+   8. SECONDARY BUTTON
+   ============================================================ */
+
+.rh-btn-secondary {
+
+  background:
+    rgba(255, 255, 255, 0.85);
+
+  color:
+    var(--rh-primary);
+
+  border:
+    1px solid rgba(70, 72, 212, 0.18);
+
+  box-shadow:
+    0 6px 15px rgba(15, 23, 42, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+
+}
+
+
+.rh-btn-secondary:hover {
+
+  background:
+    white;
+
+}
+
+
+.dark .rh-btn-secondary {
+
+  background:
+    #24263c;
+
+  color:
+    #aeb0ff;
+
+}
+
+
+/* ============================================================
+   9. RECESSED INPUTS
+   ============================================================ */
+
+.rh-input {
+
+  width: 100%;
+
+  min-height: 46px;
+
+  padding:
+    11px 14px;
+
+  border-radius:
+    var(--rh-radius-md);
+
+  border:
+    1px solid var(--rh-border);
+
+  background:
+    #f1f3fb;
+
+  color:
+    var(--rh-text);
+
+  box-shadow:
+    inset 0 2px 5px rgba(15, 23, 42, 0.05),
+    0 1px 0 rgba(255, 255, 255, 0.9);
+
+  outline: none;
+
+  transition:
+    border-color var(--rh-transition),
+    box-shadow var(--rh-transition),
+    background var(--rh-transition);
+
+}
+
+
+.rh-input:focus {
+
+  background:
+    #ffffff;
+
+  border-color:
+    rgba(70, 72, 212, 0.55);
+
+  box-shadow:
+    0 0 0 4px rgba(70, 72, 212, 0.10),
+    inset 0 2px 5px rgba(15, 23, 42, 0.03);
+
+}
+
+
+.dark .rh-input {
+
+  background:
+    #151626;
+
+  border-color:
+    #303249;
+
+}
+
+
+.dark .rh-input:focus {
+
+  background:
+    #1b1d31;
+
+}
+
+
+/* ============================================================
+   10. GLASS / FLOATING SURFACE
+   ============================================================ */
+
+.rh-glass {
+
+  background:
+    rgba(255, 255, 255, 0.78);
+
+  backdrop-filter:
+    blur(18px);
+
+  -webkit-backdrop-filter:
+    blur(18px);
+
+  border:
+    1px solid rgba(255, 255, 255, 0.85);
+
+  box-shadow:
+    0 15px 35px rgba(70, 72, 212, 0.08);
+
+}
+
+
+.dark .rh-glass {
+
+  background:
+    rgba(27, 29, 48, 0.78);
+
+  border-color:
+    rgba(255, 255, 255, 0.07);
+
+}
+
+
+/* ============================================================
+   11. FLOATING NAVIGATION
+   ============================================================ */
+
+.rh-floating-nav {
+
+  background:
+    rgba(255, 255, 255, 0.82);
+
+  backdrop-filter:
+    blur(18px);
+
+  -webkit-backdrop-filter:
+    blur(18px);
+
+  border:
+    1px solid rgba(255, 255, 255, 0.90);
+
+  border-radius:
+    20px;
+
+  box-shadow:
+    0 15px 35px rgba(15, 23, 42, 0.08),
+    0 3px 8px rgba(70, 72, 212, 0.05);
+
+}
+
+
+.rh-floating-nav-item {
+
+  border-radius:
+    14px;
+
+  transition:
+    background var(--rh-transition),
+    transform var(--rh-transition),
+    color var(--rh-transition);
+
+}
+
+
+.rh-floating-nav-item:hover {
+
+  transform:
+    translateY(-2px);
+
+  background:
+    rgba(70, 72, 212, 0.07);
+
+}
+
+
+.rh-floating-nav-item.active {
+
+  background:
+    linear-gradient(
+      135deg,
+      rgba(70, 72, 212, 0.12),
+      rgba(129, 39, 207, 0.10)
+    );
+
+  color:
+    var(--rh-primary);
+
+}
+
+
+/* ============================================================
+   12. BADGES
+   ============================================================ */
+
+.rh-badge {
+
+  display: inline-flex;
+
+  align-items: center;
+
+  justify-content: center;
+
+  padding:
+    5px 10px;
+
+  border-radius:
+    999px;
+
+  font-size:
+    12px;
+
+  font-weight:
+    700;
+
+  border:
+    1px solid rgba(70, 72, 212, 0.10);
+
+  background:
+    rgba(70, 72, 212, 0.08);
+
+  color:
+    var(--rh-primary);
+
+}
+
+
+/* ============================================================
+   13. TABLES
+   ============================================================ */
+
+.rh-table {
+
+  width: 100%;
+
+  border-collapse:
+    separate;
+
+  border-spacing:
+    0 8px;
+
+}
+
+
+.rh-table thead th {
+
+  padding:
+    10px 14px;
+
+  color:
+    var(--rh-text-muted);
+
+  font-size:
+    12px;
+
+  font-weight:
+    700;
+
+  text-transform:
+    uppercase;
+
+  letter-spacing:
+    0.04em;
+
+}
+
+
+.rh-table tbody tr {
+
+  background:
+    rgba(255, 255, 255, 0.86);
+
+  box-shadow:
+    0 4px 12px rgba(15, 23, 42, 0.04);
+
+}
+
+
+.rh-table tbody td {
+
+  padding:
+    14px;
+
+  border-top:
+    1px solid var(--rh-border);
+
+  border-bottom:
+    1px solid var(--rh-border);
+
+}
+
+
+.rh-table tbody td:first-child {
+
+  border-left:
+    1px solid var(--rh-border);
+
+  border-top-left-radius:
+    14px;
+
+  border-bottom-left-radius:
+    14px;
+
+}
+
+
+.rh-table tbody td:last-child {
+
+  border-right:
+    1px solid var(--rh-border);
+
+  border-top-right-radius:
+    14px;
+
+  border-bottom-right-radius:
+    14px;
+
+}
+
+
+.rh-table tbody tr {
+
+  transition:
+    transform var(--rh-transition),
+    box-shadow var(--rh-transition);
+
+}
+
+
+.rh-table tbody tr:hover {
+
+  transform:
+    translateY(-2px);
+
+  box-shadow:
+    0 8px 18px rgba(70, 72, 212, 0.07);
+
+}
+
+
+/* ============================================================
+   14. STAT CARDS
+   ============================================================ */
+
+.rh-stat-card {
+
+  position: relative;
+
+  overflow: hidden;
+
+  border-radius:
+    var(--rh-radius-lg);
+
+  padding:
+    22px;
+
+  background:
+    linear-gradient(
+      145deg,
+      #ffffff,
+      #f4f5ff
+    );
+
+  border:
+    1px solid var(--rh-border);
+
+  box-shadow:
+    var(--rh-shadow);
+
+  transition:
+    transform var(--rh-transition),
+    box-shadow var(--rh-transition);
+
+}
+
+
+.rh-stat-card::before {
+
+  content: "";
+
+  position: absolute;
+
+  width: 120px;
+
+  height: 120px;
+
+  right: -45px;
+
+  top: -45px;
+
+  border-radius: 50%;
+
+  background:
+    radial-gradient(
+      circle,
+      rgba(129, 39, 207, 0.12),
+      transparent 70%
+    );
+
+}
+
+
+.rh-stat-card:hover {
+
+  transform:
+    translateY(-4px);
+
+  box-shadow:
+    var(--rh-shadow-hover);
+
+}
+
+
+/* ============================================================
+   15. MODALS
+   ============================================================ */
+
+.rh-modal-backdrop {
+
+  position: fixed;
+
+  inset: 0;
+
+  z-index: 100;
+
+  display: flex;
+
+  align-items: center;
+
+  justify-content: center;
+
+  padding: 20px;
+
+  background:
+    rgba(15, 17, 35, 0.35);
+
+  backdrop-filter:
+    blur(8px);
+
+  -webkit-backdrop-filter:
+    blur(8px);
+
+}
+
+
+.rh-modal {
+
+  width: 100%;
+
+  max-width: 520px;
+
+  border-radius:
+    24px;
+
+  background:
+    var(--rh-surface);
+
+  border:
+    1px solid var(--rh-border);
+
+  box-shadow:
+    0 30px 80px rgba(15, 23, 42, 0.20);
+
+  animation:
+    modalIn 180ms ease-out;
+
+}
+
+
+@keyframes modalIn {
+
+  from {
+
+    opacity: 0;
+
+    transform:
+      translateY(12px)
+      scale(0.98);
+
+  }
+
+  to {
+
+    opacity: 1;
+
+    transform:
+      translateY(0)
+      scale(1);
+
+  }
+
+}
+
+
+/* ============================================================
+   16. FOCUS ACCESSIBILITY
+   ============================================================ */
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+
+  outline:
+    3px solid rgba(70, 72, 212, 0.25);
+
+  outline-offset:
+    2px;
+
+}
+
+
+/* ============================================================
+   17. PAGE ANIMATION
+   ============================================================ */
+
+.fade-in {
+
+  animation:
+    fadeIn 0.28s ease-out;
+
+}
+
+
+@keyframes fadeIn {
+
+  from {
+
+    opacity: 0;
+
+    transform:
+      translateY(8px);
+
+  }
+
+  to {
+
+    opacity: 1;
+
+    transform:
+      translateY(0);
+
+  }
+
+}
+
+
+/* ============================================================
+   18. SLIDE UP
+   ============================================================ */
+
+.slide-up {
+
+  animation:
+    slideUp 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
+
+}
+
+
+@keyframes slideUp {
+
+  from {
+
+    opacity: 0;
+
+    transform:
+      translateY(18px);
+
+  }
+
+  to {
+
+    opacity: 1;
+
+    transform:
+      translateY(0);
+
+  }
+
+}
+
+
+/* ============================================================
+   19. TACTILE PRESS
+   ============================================================ */
+
+.tactile-press {
+
+  transition:
+    transform 120ms ease,
+    box-shadow 120ms ease;
+
+}
+
+
+.tactile-press:active {
+
+  transform:
+    translateY(2px);
+
+  box-shadow:
+    0 3px 7px rgba(15, 23, 42, 0.08);
+
+}
+
+
+/* ============================================================
+   20. RESPONSIVE
+   ============================================================ */
+
+@media (max-width: 768px) {
+
+  .rh-card {
+
+    border-radius:
+      18px;
+
+  }
+
+
+  .rh-stat-card {
+
+    padding:
+      18px;
+
+  }
+
+
+  .rh-floating-nav {
+
+    border-radius:
+      16px;
+
+  }
+
+
+  .rh-btn {
+
+    min-height:
+      44px;
+
+  }
+
+}
+
+
+/* ============================================================
+   21. REDUCED MOTION
+   ============================================================ */
+
+@media (prefers-reduced-motion: reduce) {
+
+  *,
+  *::before,
+  *::after {
+
+    animation-duration:
+      0.01ms !important;
+
+    animation-iteration-count:
+      1 !important;
+
+    transition-duration:
+      0.01ms !important;
+
+    scroll-behavior:
+      auto !important;
+
+  }
+
+}
