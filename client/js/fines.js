@@ -1,3 +1,4 @@
+// Contributor: Shivani Jindal
 // ============================================
 // FINES.JS - View and pay fines
 // Covers: reduce, filter, template literals, async/await

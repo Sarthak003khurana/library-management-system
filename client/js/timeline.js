@@ -1,3 +1,4 @@
+// Contributor: Shivani Jindal
 // ============================================
 // TIMELINE.JS - Visual equipment booking calendar
 // ============================================

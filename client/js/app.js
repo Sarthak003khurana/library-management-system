@@ -1,3 +1,4 @@
+// Contributor: Shivani Jindal
 // ============================================
 // APP.JS - Main entry point, router, RBAC-aware navigation
 // Temporary password / forced password change

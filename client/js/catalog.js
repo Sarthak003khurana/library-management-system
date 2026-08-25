@@ -1,3 +1,4 @@
+// Contributor: Shivani Jindal
 // ============================================
 // CATALOG.JS - Browse, search, filter, borrow
 // ============================================

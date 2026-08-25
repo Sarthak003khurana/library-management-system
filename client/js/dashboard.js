@@ -1,3 +1,4 @@
+// Contributor: Shivani Jindal
 // ============================================
 // DASHBOARD.JS - Personal overview
 // Stitch-inspired Tactile UI

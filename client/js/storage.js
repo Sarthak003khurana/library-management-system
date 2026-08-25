@@ -1,3 +1,4 @@
+// Contributor: Shivani Jindal
 // ============================================
 // STORAGE.JS - localStorage wrapper
 // Covers: Local Storage, JSON, ES6 default params

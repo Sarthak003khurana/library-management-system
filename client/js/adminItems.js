@@ -1,3 +1,4 @@
+// Contributor: Shivani Jindal
 // ============================================
 // ADMIN ITEMS.JS
 // CRUD + ISBN autofill + bulk CSV import

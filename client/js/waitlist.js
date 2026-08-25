@@ -1,3 +1,4 @@
+// Contributor: Shivani Jindal
 // ============================================
 // WAITLIST.JS (frontend) - Smart priority waitlist view
 // Covers: sort, map, template literals, destructuring

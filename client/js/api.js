@@ -1,3 +1,4 @@
+// Contributor: Shivani Jindal
 // ============================================
 // API.JS - Fetch wrapper for all backend calls
 // Covers: Async/Await, Promises, Fetch API, JSON, Error Handling

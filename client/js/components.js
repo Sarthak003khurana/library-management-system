@@ -1,3 +1,4 @@
+// Contributor: Shivani Jindal
 // ============================================
 // COMPONENTS.JS - Reusable UI building blocks
 // ============================================

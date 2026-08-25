@@ -1,3 +1,4 @@
+// Contributor: Shivani Jindal
 // ============================================
 // AUTH.JS - Authentication / session helpers
 // Includes:
