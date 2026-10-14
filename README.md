@@ -1,3 +1,4 @@
+<!-- Contributor: Sahilpreet Singh Sidhu (@sahilsidhu7) -->
 # 📚 ResourceHub — Library & Lab Equipment Booking System
 
 > **Repository:** [github.com/Sarthak003khurana/library-management-system](https://github.com/Sarthak003khurana/library-management-system)
@@ -254,7 +255,7 @@ When editing an item, the admin can change `quantity`. The system:
 
 1. Calculates `borrowedCopies = oldTotal - oldAvailable`
 2. Sets `newAvailable = newTotal - borrowedCopies`
-3. **Rejects** the update if `newTotal < borrowedCopies` with error:  
+3. **Rejects** the update if `newTotal < borrowedCopies` with error:
    `"Cannot reduce total quantity below X currently borrowed copies"`
 
 ### Concurrency Protection
@@ -350,7 +351,7 @@ If Open Library returns no data or the request fails, the admin sees an error me
   - 🔴 Red = Overdue booking
 
 ### Conflicting Bookings
-Server-side overlap detection using date-range comparison. If a new booking overlaps with any `active` reservation for the same item, the API returns `409 Conflict` with message:  
+Server-side overlap detection using date-range comparison. If a new booking overlaps with any `active` reservation for the same item, the API returns `409 Conflict` with message:
 `"This time slot conflicts with an existing booking"`
 
 ### Booking Status
