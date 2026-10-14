@@ -1,4 +1,11 @@
 node_modules/
 server/data/db.json
 .env
+.env*.local
+client/.env
+client/.env*.local
 firebase-service-account.json
+firebase-debug.log
+client_vanilla_backup/
+client/dist/
+dist/

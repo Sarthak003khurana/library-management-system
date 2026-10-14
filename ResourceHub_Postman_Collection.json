@@ -1,0 +1,432 @@
+{
+  "info": {
+    "_postman_id": "7f8b9d0e-1a2b-4c3d-8e4f-5a6b7c8d9e0f",
+    "name": "ResourceHub REST API Collection (Syllabus Point 58)",
+    "description": "Comprehensive Postman test collection for ResourceHub – Library & Lab Equipment Booking/Management System.\n\nCovers Syllabus:\n- Point 53: HTTP Request/Response Lifecycle\n- Point 55: Express.js Routing\n- Point 56: RESTful Endpoints & Middleware\n- Point 57: JWT Authentication & Role-Based Access Control\n- Point 58: File Uploads & API Testing\n- Point 59: Firestore Database Operations\n- Point 60: Full-Stack Integration Testing",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:5000",
+      "type": "string",
+      "description": "Local development URL or Production URL (https://library-management-system-xnax.onrender.com)"
+    },
+    {
+      "key": "authToken",
+      "value": "",
+      "type": "string",
+      "description": "Bearer JWT token dynamically set by Login request test script"
+    }
+  ],
+  "item": [
+    {
+      "name": "System Health",
+      "item": [
+        {
+          "name": "GET /api/health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "health"]
+            },
+            "description": "Health check verifying Express server and Firebase connection"
+          }
+        }
+      ]
+    },
+    {
+      "name": "1. Authentication & Users (Point 46, 57)",
+      "item": [
+        {
+          "name": "Login (Admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.token) {",
+                  "    pm.collectionVariables.set('authToken', res.token);",
+                  "    console.log('Saved authToken into collection variable');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@resourcehub.edu\",\n  \"password\": \"admin123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "login"]
+            }
+          }
+        },
+        {
+          "name": "Register User",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Jane Doe\",\n  \"email\": \"jane.doe@university.edu\",\n  \"password\": \"StudentPass123!\",\n  \"role\": \"student\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/register",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "register"]
+            }
+          }
+        },
+        {
+          "name": "Get Current User Profile",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{authToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "me"]
+            }
+          }
+        },
+        {
+          "name": "Change Password",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{authToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"currentPassword\": \"admin123\",\n  \"newPassword\": \"AdminNewSecret123!\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/change-password",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "change-password"]
+            }
+          }
+        },
+        {
+          "name": "Admin: Get All Users",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{authToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/users",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "users"]
+            }
+          }
+        },
+        {
+          "name": "Admin: Create User with Temp Password",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{authToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Dr. Alex Smith\",\n  \"email\": \"asmith@university.edu\",\n  \"role\": \"faculty\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/admin/create-user",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "admin", "create-user"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Resources & Items (Point 52, 56, 58, 59)",
+      "item": [
+        {
+          "name": "Get All Catalog Items",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/items",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "items"]
+            }
+          }
+        },
+        {
+          "name": "Filter Items by Type",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/items?type=equipment",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "items"],
+              "query": [{ "key": "type", "value": "equipment" }]
+            }
+          }
+        },
+        {
+          "name": "Lookup Book by ISBN (OpenLibrary)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{authToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/items/lookup/isbn/9780132350884",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "items", "lookup", "isbn", "9780132350884"]
+            }
+          }
+        },
+        {
+          "name": "Admin: Create Item",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{authToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Quantum Computing in Practice\",\n  \"type\": \"book\",\n  \"category\": \"Physics\",\n  \"quantity\": 3,\n  \"location\": \"Shelf 4C\",\n  \"finePerDay\": 5,\n  \"author\": \"Michael Nielsen\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/items",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "items"]
+            }
+          }
+        },
+        {
+          "name": "Admin: Bulk Import Items (JSON Payload)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{authToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"items\": [\n    {\n      \"title\": \"Logic Analyzer 16-Channel\",\n      \"type\": \"equipment\",\n      \"category\": \"Electronics Lab\",\n      \"quantity\": 2,\n      \"location\": \"Bench 7\",\n      \"finePerDay\": 15\n    },\n    {\n      \"title\": \"Operating Systems: Three Easy Pieces\",\n      \"type\": \"book\",\n      \"category\": \"Computer Science\",\n      \"quantity\": 4,\n      \"location\": \"Shelf 2B\",\n      \"finePerDay\": 3\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/items/bulk-import",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "items", "bulk-import"]
+            }
+          }
+        },
+        {
+          "name": "Admin: Bulk Import via File Upload (Point 52 & 58)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{authToken}}" }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": []
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/items/bulk-import-file",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "items", "bulk-import-file"]
+            },
+            "description": "Upload a .json or .csv file to test Node.js Buffers, Multer memory storage, and batch Firestore writing."
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Reservations & Timeline (Point 50, 56, 59)",
+      "item": [
+        {
+          "name": "Get User Reservations",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{authToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/reservations",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "reservations"]
+            }
+          }
+        },
+        {
+          "name": "Create Book Loan or Equipment Booking",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{authToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"itemId\": \"item-id-here\",\n  \"startDate\": \"2026-10-15\",\n  \"endDate\": \"2026-10-17\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/reservations",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "reservations"]
+            }
+          }
+        },
+        {
+          "name": "Return Item with Condition Assessment",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{authToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"conditionRating\": 9,\n  \"damageDescription\": \"\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/reservations/reservation-id-here/return",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "reservations", "reservation-id-here", "return"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Waitlist Queue (Point 50, 59)",
+      "item": [
+        {
+          "name": "Get User Waitlist Entries",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{authToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/waitlist",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "waitlist"]
+            }
+          }
+        },
+        {
+          "name": "Join Waitlist",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{authToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"itemId\": \"item-id-here\",\n  \"urgency\": \"normal\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/waitlist",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "waitlist"]
+            }
+          }
+        },
+        {
+          "name": "Leave Waitlist",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{authToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/waitlist/waitlist-entry-id-here",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "waitlist", "waitlist-entry-id-here"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Fines & Penalties (Point 50, 56, 59)",
+      "item": [
+        {
+          "name": "Get Account Fines",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{authToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/fines",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "fines"]
+            }
+          }
+        },
+        {
+          "name": "Settle Fine Payment",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{authToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/fines/fine-id-here/pay",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "fines", "fine-id-here", "pay"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. Analytics & KPI (Point 56, 59)",
+      "item": [
+        {
+          "name": "Get Admin Overview Analytics",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{authToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/analytics/overview",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "analytics", "overview"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

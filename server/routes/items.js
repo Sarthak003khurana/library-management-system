@@ -50,7 +50,29 @@ const {
   allowRoles
 } = require('../middleware/rbac');
 
+const multer = require('multer');
+const eventHub = require('../utils/eventEmitter');
+
 const router = express.Router();
+
+// Point 52 & 58: In-memory Buffer upload for CSV/JSON files
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB max
+  fileFilter: (req, file, cb) => {
+    if (
+      file.mimetype === 'application/json' ||
+      file.mimetype === 'text/csv' ||
+      file.mimetype === 'text/plain' ||
+      file.originalname.endsWith('.json') ||
+      file.originalname.endsWith('.csv')
+    ) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only .csv and .json files are supported for import'));
+    }
+  }
+});
 
 const ADMIN_ROLES = [
   'admin',
@@ -1369,6 +1391,98 @@ router.post(
 
     }
 
+  }
+);
+
+
+// ============================================
+// BULK IMPORT VIA FILE UPLOAD
+// Syllabus:
+// - Point 52: Buffers and Streams (decoding uploaded file Buffer)
+// - Point 58: File Uploads via Multer + Validation
+// ============================================
+
+router.post(
+  '/bulk-import-file',
+  requireAuth,
+  allowRoles(...ADMIN_ROLES),
+  upload.single('file'),
+  async (req, res) => {
+    try {
+      if (!req.file || !req.file.buffer) {
+        return res.status(400).json({ message: 'No file uploaded' });
+      }
+
+      // Point 52: Node.js Buffer handling
+      const fileBuffer = req.file.buffer;
+      const fileContent = fileBuffer.toString('utf-8');
+
+      let rows = [];
+      if (req.file.originalname.endsWith('.json') || req.file.mimetype === 'application/json') {
+        rows = JSON.parse(fileContent);
+      } else {
+        // Parse CSV format
+        const lines = fileContent.split('\n').filter(l => l.trim().length > 0);
+        if (lines.length > 1) {
+          const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+          rows = lines.slice(1).map(line => {
+            const values = line.split(',').map(v => v.trim().replace(/^"|"$/g, ''));
+            const obj = {};
+            headers.forEach((h, idx) => {
+              obj[h] = values[idx] || '';
+            });
+            return obj;
+          });
+        }
+      }
+
+      if (!Array.isArray(rows) || rows.length === 0) {
+        return res.status(400).json({ message: 'File contains no valid item rows' });
+      }
+
+      const batch = firestore.batch();
+      const created = [];
+
+      for (const row of rows) {
+        if (!row.title) continue;
+        const totalQuantity = Math.max(1, parseQuantity(row.quantity, 1));
+        const item = {
+          id: crypto.randomUUID(),
+          title: String(row.title).trim(),
+          type: row.type || 'book',
+          category: row.category || 'General',
+          status: 'available',
+          location: row.location || 'Unassigned',
+          finePerDay: Number(row.finePerDay) || (row.type === 'equipment' ? 10 : 3),
+          isbn: row.isbn || null,
+          author: row.author || null,
+          quantity: totalQuantity,
+          availableQuantity: totalQuantity,
+          conditionRating: 10,
+          createdAt: new Date().toISOString()
+        };
+
+        const itemRef = itemsCollection.doc(item.id);
+        batch.set(itemRef, item);
+        created.push(item);
+      }
+
+      await batch.commit();
+
+      eventHub.emit('audit:log', {
+        action: 'ITEMS_BULK_IMPORTED_FILE',
+        userId: req.user.id,
+        details: { count: created.length, filename: req.file.originalname }
+      });
+
+      return res.status(201).json({
+        importedCount: created.length,
+        items: created
+      });
+    } catch (err) {
+      console.error('File bulk import error:', err);
+      return res.status(500).json({ message: err.message || 'File import failed' });
+    }
   }
 );
 

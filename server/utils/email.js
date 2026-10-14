@@ -2,13 +2,15 @@
 // EMAIL.JS - ResourceHub Email Service
 // ============================================
 //
-// Sends account-creation emails using Gmail
-// through Nodemailer.
+// Supports two email providers:
 //
-// Required .env variables:
+// LOCAL:
+//   EMAIL_PROVIDER=gmail
+//   Uses Gmail + Nodemailer
 //
-// EMAIL_USER=yourgmail@gmail.com
-// EMAIL_APP_PASSWORD=your-gmail-app-password
+// PRODUCTION / RENDER:
+//   EMAIL_PROVIDER=resend
+//   Uses Resend HTTPS API
 //
 // ============================================
 
@@ -16,19 +18,110 @@ const nodemailer = require('nodemailer');
 
 
 // ============================================
-// EMAIL TRANSPORTER
+// PROVIDER CLIENTS
 // ============================================
 
-const transporter = nodemailer.createTransport({
+let gmailTransporter = null;
+let resendClient = null;
 
-  service: 'gmail',
 
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_APP_PASSWORD
+// ============================================
+// GET EMAIL PROVIDER
+// ============================================
+
+function getEmailProvider() {
+
+  return (
+    process.env.EMAIL_PROVIDER ||
+    'gmail'
+  ).toLowerCase().trim();
+
+}
+
+
+// ============================================
+// GMAIL TRANSPORTER
+// ============================================
+
+function getGmailTransporter() {
+
+  if (!process.env.EMAIL_USER) {
+
+    throw new Error(
+      'EMAIL_USER is not configured.'
+    );
+
   }
 
-});
+  if (!process.env.EMAIL_APP_PASSWORD) {
+
+    throw new Error(
+      'EMAIL_APP_PASSWORD is not configured.'
+    );
+
+  }
+
+
+  if (!gmailTransporter) {
+
+    gmailTransporter =
+      nodemailer.createTransport({
+
+        service: 'gmail',
+
+        auth: {
+
+          user:
+            process.env.EMAIL_USER,
+
+          pass:
+            process.env.EMAIL_APP_PASSWORD
+
+        }
+
+      });
+
+  }
+
+
+  return gmailTransporter;
+
+}
+
+
+// ============================================
+// RESEND CLIENT
+// ============================================
+
+function getResendClient() {
+
+  if (!process.env.RESEND_API_KEY) {
+
+    throw new Error(
+      'RESEND_API_KEY is not configured.'
+    );
+
+  }
+
+
+  if (!resendClient) {
+
+    const {
+      Resend
+    } = require('resend');
+
+
+    resendClient =
+      new Resend(
+        process.env.RESEND_API_KEY
+      );
+
+  }
+
+
+  return resendClient;
+
+}
 
 
 // ============================================
@@ -37,50 +130,130 @@ const transporter = nodemailer.createTransport({
 
 async function verifyEmailConfiguration() {
 
-  if (
-    !process.env.EMAIL_USER ||
-    !process.env.EMAIL_APP_PASSWORD
-  ) {
+  const provider =
+    getEmailProvider();
 
-    console.warn(
-      '⚠️ Email configuration is missing. Account emails will not be sent.'
-    );
 
-    return false;
+  // ==========================================
+  // GMAIL
+  // ==========================================
+
+  if (provider === 'gmail') {
+
+    if (
+      !process.env.EMAIL_USER ||
+      !process.env.EMAIL_APP_PASSWORD
+    ) {
+
+      console.warn(
+        '⚠️ Gmail email configuration is missing.'
+      );
+
+      return false;
+
+    }
+
+
+    try {
+
+      await getGmailTransporter().verify();
+
+      console.log(
+        '✓ Gmail email service initialized successfully'
+      );
+
+      return true;
+
+    }
+    catch (error) {
+
+      console.error(
+        '✕ Gmail email service verification failed:',
+        error.message
+      );
+
+      return false;
+
+    }
 
   }
 
 
-  try {
+  // ==========================================
+  // RESEND
+  // ==========================================
 
-    await transporter.verify();
+  if (provider === 'resend') {
 
-    console.log(
-      '✓ Email service initialized successfully'
-    );
+    if (!process.env.RESEND_API_KEY) {
 
-    return true;
+      console.warn(
+        '⚠️ RESEND_API_KEY is missing.'
+      );
+
+      return false;
+
+    }
+
+
+    if (!process.env.EMAIL_FROM) {
+
+      console.warn(
+        '⚠️ EMAIL_FROM is missing.'
+      );
+
+      return false;
+
+    }
+
+
+    try {
+
+      getResendClient();
+
+      console.log(
+        '✓ Resend email service initialized successfully'
+      );
+
+      return true;
+
+    }
+    catch (error) {
+
+      console.error(
+        '✕ Resend email service initialization failed:',
+        error.message
+      );
+
+      return false;
+
+    }
 
   }
-  catch (error) {
 
-    console.error(
-      '✕ Email service verification failed:',
-      error.message
-    );
 
-    return false;
+  // ==========================================
+  // INVALID PROVIDER
+  // ==========================================
 
-  }
+  console.error(
+    `✕ Unsupported EMAIL_PROVIDER: ${provider}`
+  );
+
+  console.error(
+    'Supported providers: gmail, resend'
+  );
+
+  return false;
 
 }
 
 
 // ============================================
-// SEND ACCOUNT CREATION EMAIL
+// BUILD EMAIL CONTENT
 // ============================================
 
-async function sendAccountCreationEmail({
+function buildEmailContent({
 
   name,
   email,
@@ -90,27 +263,24 @@ async function sendAccountCreationEmail({
 
 }) {
 
-  if (
-    !process.env.EMAIL_USER ||
-    !process.env.EMAIL_APP_PASSWORD
-  ) {
 
-    throw new Error(
-      'Email service is not configured. Please check EMAIL_USER and EMAIL_APP_PASSWORD in .env'
-    );
-
-  }
-
+  // ==========================================
+  // ROLE NAMES
+  // ==========================================
 
   const roleNames = {
 
-    student: 'Student',
+    student:
+      'Student',
 
-    faculty: 'Faculty',
+    faculty:
+      'Faculty',
 
-    lab_manager: 'Lab Manager',
+    lab_manager:
+      'Lab Manager',
 
-    admin: 'Administrator'
+    admin:
+      'Administrator'
 
   };
 
@@ -119,23 +289,11 @@ async function sendAccountCreationEmail({
     roleNames[role] || role;
 
 
-  const mailOptions = {
+  // ==========================================
+  // PLAIN TEXT EMAIL
+  // ==========================================
 
-    from: {
-
-      name: 'ResourceHub',
-
-      address: process.env.EMAIL_USER
-
-    },
-
-    to: email,
-
-    subject:
-      'Your ResourceHub Account Has Been Created',
-
-
-    text: `
+  const text = `
 
 Hello ${name},
 
@@ -181,10 +339,14 @@ please contact your administrator.
 Regards,
 ResourceHub Administration
 
-    `.trim(),
+  `.trim();
 
 
-    html: `
+  // ==========================================
+  // HTML EMAIL
+  // ==========================================
+
+  const html = `
 
 <!DOCTYPE html>
 
@@ -194,12 +356,9 @@ ResourceHub Administration
 
   <meta charset="UTF-8">
 
-  <title>
-    ResourceHub Account
-  </title>
+  <title>ResourceHub Account</title>
 
 </head>
-
 
 <body
   style="
@@ -424,23 +583,209 @@ ResourceHub Administration
 
 </html>
 
-    `.trim()
+  `.trim();
 
+
+  return {
+    text,
+    html
   };
 
-
-  const result =
-    await transporter.sendMail(
-      mailOptions
-    );
+}
 
 
-  console.log(
-    `✓ Account creation email sent to ${email}`
+// ============================================
+// SEND ACCOUNT CREATION EMAIL
+// ============================================
+
+async function sendAccountCreationEmail({
+
+  name,
+  email,
+  role,
+  temporaryPassword,
+  loginUrl
+
+}) {
+
+  const provider =
+    getEmailProvider();
+
+
+  const {
+    text,
+    html
+  } =
+    buildEmailContent({
+
+      name,
+      email,
+      role,
+      temporaryPassword,
+      loginUrl
+
+    });
+
+
+  // ==========================================
+  // GMAIL
+  // ==========================================
+
+  if (provider === 'gmail') {
+
+    const transporter =
+      getGmailTransporter();
+
+
+    const mailOptions = {
+
+      from: {
+
+        name:
+          'ResourceHub',
+
+        address:
+          process.env.EMAIL_USER
+
+      },
+
+      to:
+        email,
+
+      subject:
+        'Your ResourceHub Account Has Been Created',
+
+      text,
+
+      html
+
+    };
+
+
+    try {
+
+      const result =
+        await transporter.sendMail(
+          mailOptions
+        );
+
+
+      console.log(
+        `✓ Account creation email sent to ${email} using Gmail`
+      );
+
+
+      if (result.messageId) {
+
+        console.log(
+          `✓ Gmail message ID: ${result.messageId}`
+        );
+
+      }
+
+
+      return result;
+
+    }
+    catch (error) {
+
+      console.error(
+        `✕ Gmail email failed for ${email}:`,
+        error.message
+      );
+
+      throw error;
+
+    }
+
+  }
+
+
+  // ==========================================
+  // RESEND
+  // ==========================================
+
+  if (provider === 'resend') {
+
+    if (!process.env.EMAIL_FROM) {
+
+      throw new Error(
+        'EMAIL_FROM is not configured for Resend.'
+      );
+
+    }
+
+
+    const resend =
+      getResendClient();
+
+
+    try {
+
+      const result =
+        await resend.emails.send({
+
+          from:
+            process.env.EMAIL_FROM,
+
+          to:
+            [email],
+
+          subject:
+            'Your ResourceHub Account Has Been Created',
+
+          text,
+
+          html
+
+        });
+
+
+      if (result.error) {
+
+        throw new Error(
+          result.error.message ||
+          'Resend failed to send the email.'
+        );
+
+      }
+
+
+      console.log(
+        `✓ Account creation email sent to ${email} using Resend`
+      );
+
+
+      console.log(
+        `✓ Resend email ID: ${result.data?.id || 'unknown'}`
+      );
+
+
+      return result.data;
+
+    }
+    catch (error) {
+
+      console.error(
+        `✕ Resend email failed for ${email}:`,
+        error.message
+      );
+
+      throw error;
+
+    }
+
+  }
+
+
+  // ==========================================
+  // INVALID PROVIDER
+  // ==========================================
+
+  throw new Error(
+    `Unsupported EMAIL_PROVIDER: ${provider}. ` +
+    `Use "gmail" or "resend".`
   );
-
-
-  return result;
 
 }
 

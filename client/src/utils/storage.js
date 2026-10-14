@@ -1,23 +1,31 @@
 // ============================================
-// STORAGE.JS - localStorage wrapper
-// Covers: Local Storage, JSON, ES6 default params
+// STORAGE.JS - Safe LocalStorage Utility
+// Syllabus Point 31 / 43
 // ============================================
+
 export const Storage = {
   set(key, value) {
-    localStorage.setItem(key, JSON.stringify(value));
+    try {
+      localStorage.setItem(key, JSON.stringify(value));
+    } catch (err) {
+      console.warn(`Error writing ${key} to localStorage:`, err);
+    }
   },
+
   get(key, fallback = null) {
     const raw = localStorage.getItem(key);
-    if (raw === null) return fallback;
+    if (raw === null || raw === undefined) return fallback;
     try {
       return JSON.parse(raw);
     } catch {
-      return fallback;
+      return raw || fallback;
     }
   },
+
   remove(key) {
     localStorage.removeItem(key);
   },
+
   clear() {
     localStorage.clear();
   }

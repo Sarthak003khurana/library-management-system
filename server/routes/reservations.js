@@ -37,6 +37,7 @@ const {
   calculateLateFee,
   calculateConditionFine
 } = require('../utils/fineCalculator');
+const eventHub = require('../utils/eventEmitter');
 
 const router = express.Router();
 
@@ -766,6 +767,12 @@ router.post(
 
       }
 
+
+      // Point 52: Event-driven notification dispatch
+      eventHub.emit('reservation:created', {
+        reservation: response,
+        user: req.user
+      });
 
       res.status(201).json(
         response
