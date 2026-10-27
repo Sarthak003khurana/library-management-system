@@ -48,7 +48,7 @@ const configuredOrigins = rawCorsOrigin
   ? rawCorsOrigin.split(',').map((o) => o.trim())
   : ['http://localhost:5173', 'http://localhost:5000', 'http://localhost:3000', 'http://127.0.0.1:5173'];
 
-app.use(cors({
+const corsOptions = {
   origin: (origin, callback) => {
     // Non-browser or same-origin requests have no origin header
     if (!origin) return callback(null, true);
@@ -58,14 +58,36 @@ app.use(cors({
       return callback(null, true);
     }
 
-    if (configuredOrigins.includes(origin) || configuredOrigins.includes('*')) {
-      return callback(null, true);
+    // Automatically allow all Vercel production and preview deployment URLs
+    try {
+      const parsedOrigin = new URL(origin);
+      if (
+        parsedOrigin.hostname === 'vercel.app' ||
+        parsedOrigin.hostname.endsWith('.vercel.app')
+      ) {
+        return callback(null, true);
+      }
+    } catch (_) {}
+
+    // Check explicitly configured origins (exact match or wildcard domain)
+    for (const allowed of configuredOrigins) {
+      if (allowed === '*' || allowed === origin) {
+        return callback(null, true);
+      }
+      if (allowed.startsWith('*.') && origin.endsWith(allowed.slice(1))) {
+        return callback(null, true);
+      }
     }
 
     return callback(new Error(`CORS error: Origin ${origin} not permitted`));
   },
-  credentials: true
-}));
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+};
+
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 
 // Request logger middleware (Point 49, 50, 53, 56)
 app.use(requestLogger);
