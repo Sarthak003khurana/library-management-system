@@ -75,8 +75,13 @@ router.get(
           new Date(a.createdAt)
       );
 
+      const enrichedFines = list.map(fine => ({
+        ...fine,
+        paid: !!fine.paid,
+        status: fine.paid ? 'paid' : 'unpaid'
+      }));
 
-      res.json(list);
+      res.json(enrichedFines);
 
     }
     catch (error) {
@@ -196,6 +201,7 @@ router.post(
           fine.id,
           {
             paid: true,
+            status: 'paid',
             paidAt:
               new Date().toISOString()
           }

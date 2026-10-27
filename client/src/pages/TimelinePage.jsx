@@ -51,7 +51,9 @@ export default function TimelinePage() {
       setLoading(true);
       const [equipData, resData] = await Promise.all([
         API.get('/api/items?type=equipment'),
-        API.get('/api/reservations?all=true').catch(() => API.get('/api/reservations'))
+        API.get('/api/reservations/equipment-schedule').catch(() =>
+          API.get('/api/reservations?all=true').catch(() => API.get('/api/reservations'))
+        )
       ]);
 
       setEquipment(Array.isArray(equipData) ? equipData : equipData?.items || []);
@@ -74,7 +76,7 @@ export default function TimelinePage() {
     // Check existing reservations for this item
     const matchingRes = reservations.filter((r) => {
       if (r.itemId !== item.id) return false;
-      if (r.status === 'cancelled' || r.status === 'returned') return false;
+      if (r.status === 'cancelled' || r.status === 'returned' || r.status === 'completed') return false;
 
       const start = new Date(r.startDate || r.createdAt);
       start.setHours(0, 0, 0, 0);
@@ -86,7 +88,7 @@ export default function TimelinePage() {
     });
 
     if (matchingRes.length > 0) {
-      const isMine = matchingRes.some((r) => r.userId === user?.id);
+      const isMine = matchingRes.some((r) => r.isMine === true || r.userId === user?.id);
       return isMine ? 'mine' : 'booked';
     }
 

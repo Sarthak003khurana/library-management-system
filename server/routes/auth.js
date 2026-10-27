@@ -84,7 +84,8 @@ function signToken(user) {
       id: user.id,
       name: user.name,
       email: user.email,
-      role: user.role
+      role: user.role,
+      mustChangePassword: user.mustChangePassword === true
     },
     JWT_SECRET,
     {
@@ -262,6 +263,8 @@ function isValidEmail(email) {
 // POST /api/auth/admin/create-user
 //
 // Only administrators can create accounts.
+// Temporary credentials are generated and dispatched securely via
+// email; they are NEVER returned as plaintext in the API response.
 //
 // Body:
 //
@@ -271,13 +274,17 @@ function isValidEmail(email) {
 //   "role": "student"
 // }
 //
-// Response:
+// Response (Contract):
 //
 // {
-//   "message": "...",
-//   "user": {...},
-//   "temporaryPassword": "..."
+//   "success": true,
+//   "message": "User account created successfully and login details were emailed.",
+//   "emailSent": true,
+//   "user": { ... }
 // }
+//
+// When email delivery fails, the user is still created, returning
+// emailSent: false along with emailError, allowing admins to retry delivery.
 //
 // ============================================
 
@@ -418,41 +425,18 @@ router.post(
       // ----------------------------------------
 
       const user = {
-
-        id:
-          crypto.randomUUID(),
-
-        name:
-          cleanName,
-
-        email:
-          normalizedEmail,
-
-        password:
-          bcrypt.hashSync(
-            temporaryPassword,
-            10
-          ),
-
+        id: crypto.randomUUID(),
+        name: cleanName,
+        email: normalizedEmail,
+        password: bcrypt.hashSync(temporaryPassword, 10),
         role,
-
-        reliabilityScore:
-          75,
-
-        authProvider:
-          'password',
-
-        mustChangePassword:
-          true,
-
-        createdBy:
-          req.user.id,
-
-        createdAt:
-          new Date().toISOString()
-
+        reliabilityScore: 75,
+        authProvider: 'password',
+        mustChangePassword: true,
+        emailDeliveryStatus: 'pending',
+        createdBy: req.user.id,
+        createdAt: new Date().toISOString()
       };
-
 
       // ----------------------------------------
       // Save to Firestore
@@ -460,129 +444,267 @@ router.post(
 
       await saveUser(user);
 
-
       console.log(
         `✓ Admin ${req.user.email} created user ${normalizedEmail} with role ${role}`
       );
 
-
       // ----------------------------------------
       // SEND ACCOUNT CREATION EMAIL
-      // ----------------------------------------
-      //
-      // The plain temporary password is only
-      // available here.
-      //
-      // Firestore contains only the bcrypt hash.
-      //
       // ----------------------------------------
 
       const loginUrl =
         process.env.APP_LOGIN_URL ||
         `http://localhost:${process.env.PORT || 5000}`;
 
-
       try {
-
         await sendAccountCreationEmail({
-
-          name:
-            cleanName,
-
-          email:
-            normalizedEmail,
-
+          name: cleanName,
+          email: normalizedEmail,
           role,
-
           temporaryPassword,
-
           loginUrl
-
         });
-
 
         console.log(
           `✓ Account email sent to ${normalizedEmail}`
         );
 
+        user.emailDeliveryStatus = 'sent';
+        await usersCollection.doc(user.id).update({
+          emailDeliveryStatus: 'sent'
+        }).catch(() => {});
+
+        return res.status(201).json({
+          success: true,
+          message:
+            'User account created successfully and login details were emailed.',
+          emailSent: true,
+          user: publicUser(user)
+        });
       }
       catch (emailError) {
-
-        // --------------------------------------
-        // IMPORTANT:
-        //
-        // The user has already been successfully
-        // created in Firestore.
-        //
-        // We don't delete the account just
-        // because email delivery failed.
-        // --------------------------------------
-
         console.error(
           `✕ Could not send account email to ${normalizedEmail}:`,
           emailError.message
         );
 
+        user.emailDeliveryStatus = 'failed';
+        await usersCollection.doc(user.id).update({
+          emailDeliveryStatus: 'failed',
+          emailError: emailError.message
+        }).catch(() => {});
 
         return res.status(201).json({
-
+          success: true,
           message:
-            'User account created, but the email could not be sent.',
-
-          emailSent:
-            false,
-
-          emailError:
-            emailError.message,
-
-          user:
-            publicUser(user),
-
-          temporaryPassword
-
+            'User account created, but the temporary credentials email could not be delivered. You may retry delivery using the Resend button.',
+          emailSent: false,
+          emailError: emailError.message,
+          user: publicUser(user)
         });
-
       }
-
-
-      // ----------------------------------------
-      // Return success
-      // ----------------------------------------
-
-      return res.status(201).json({
-
-        message:
-          'User account created successfully and login details were emailed.',
-
-        emailSent:
-          true,
-
-        user:
-          publicUser(user),
-
-        temporaryPassword
-
-      });
 
     }
     catch (error) {
-
       console.error(
         'Admin user creation error:',
         error
       );
 
-
       return res.status(500).json({
-
         message:
           error.message ||
           'Could not create user account'
-
       });
-
     }
+  }
+);
 
+
+// ============================================
+// ADMIN RESEND TEMPORARY CREDENTIALS
+// ============================================
+//
+// POST /api/auth/admin/resend-credentials/:id
+//
+// Generates a fresh temporary password, updates the user's
+// hashed password in the database, sets mustChangePassword: true,
+// and securely emails the new credentials without returning
+// the plaintext password in the response.
+// ============================================
+
+router.post(
+  '/admin/resend-credentials/:id',
+  requireAuth,
+  allowRoles('admin'),
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      // 1. Fetch user from Firestore
+      const userDoc = await usersCollection.doc(id).get();
+      let user = userDoc.exists ? { id: userDoc.id, ...userDoc.data() } : null;
+
+      // Fallback to legacy db if needed
+      if (!user) {
+        user = await db.findById('users', id);
+      }
+
+      if (!user) {
+        return res.status(404).json({ message: 'User account not found' });
+      }
+
+      // 2. Generate a new cryptographically secure temporary password
+      const newTemporaryPassword = generateTemporaryPassword();
+      const newPasswordHash = bcrypt.hashSync(newTemporaryPassword, 10);
+
+      // 3. Update database record
+      const updateData = {
+        password: newPasswordHash,
+        mustChangePassword: true,
+        emailDeliveryStatus: 'pending',
+        credentialsResetAt: new Date().toISOString(),
+      };
+
+      if (userDoc.exists) {
+        await usersCollection.doc(id).update(updateData);
+      } else {
+        await db.update('users', id, updateData);
+      }
+
+      // 4. Send email
+      const loginUrl =
+        process.env.APP_LOGIN_URL ||
+        `http://localhost:${process.env.PORT || 5000}`;
+
+      try {
+        await sendAccountCreationEmail({
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          temporaryPassword: newTemporaryPassword,
+          loginUrl,
+        });
+
+        if (userDoc.exists) {
+          await usersCollection.doc(id).update({
+            emailDeliveryStatus: 'sent',
+            emailError: null,
+          }).catch(() => {});
+        }
+
+        return res.json({
+          success: true,
+          emailSent: true,
+          message: `Temporary login credentials successfully emailed to ${user.email}.`,
+        });
+      } catch (emailErr) {
+        console.error(`✕ Failed to dispatch resend email to ${user.email}:`, emailErr.message);
+
+        if (userDoc.exists) {
+          await usersCollection.doc(id).update({
+            emailDeliveryStatus: 'failed',
+            emailError: emailErr.message,
+          }).catch(() => {});
+        }
+
+        return res.status(500).json({
+          success: false,
+          emailSent: false,
+          message: `Failed to deliver email to ${user.email}: ${emailErr.message}`,
+          emailError: emailErr.message,
+        });
+      }
+    } catch (err) {
+      console.error('Resend credentials error:', err);
+      return res.status(500).json({
+        message: err.message || 'Could not reset and resend credentials',
+      });
+    }
+  }
+);
+
+
+// ============================================
+// PUBLIC USER REGISTRATION
+// ============================================
+// Covers Syllabus:
+// - Point 37: Express Routing & Request Body Parsing
+// - Point 39: Request Validation, bcrypt Password Hashing, JWT
+// - Security: Role escalation protection (cannot register as admin)
+// ============================================
+
+router.post(
+  '/register',
+  async (req, res) => {
+    try {
+      const { name, email, password, role } = req.body;
+
+      const cleanName = String(name || '').trim();
+      if (!cleanName) {
+        return res.status(400).json({ message: 'Full name is required' });
+      }
+
+      const normalizedEmail = normalizeEmail(email);
+      if (!normalizedEmail || !isValidEmail(normalizedEmail)) {
+        return res.status(400).json({ message: 'A valid email address is required' });
+      }
+
+      if (!password || String(password).length < 6) {
+        return res.status(400).json({ message: 'Password must be at least 6 characters long' });
+      }
+
+      // Role escalation protection: public registration cannot provision admin or lab manager
+      let assignedRole = 'student';
+      if (role === 'faculty') {
+        assignedRole = 'faculty';
+      } else if (role === 'admin' || role === 'lab_manager') {
+        return res.status(403).json({
+          message: 'Public registration cannot provision administrative roles. Contact an administrator.'
+        });
+      }
+
+      // Duplicate account verification
+      let existingUser = await findUserByEmail(normalizedEmail);
+      if (!existingUser) {
+        existingUser = await db.findOne(
+          'users',
+          u => u.email && String(u.email).trim().toLowerCase() === normalizedEmail
+        );
+      }
+
+      if (existingUser) {
+        return res.status(409).json({ message: 'An account with this email address already exists' });
+      }
+
+      const hashedPassword = bcrypt.hashSync(String(password), 10);
+
+      const user = {
+        id: crypto.randomUUID(),
+        name: cleanName,
+        email: normalizedEmail,
+        password: hashedPassword,
+        role: assignedRole,
+        reliabilityScore: 75,
+        authProvider: 'password',
+        mustChangePassword: false,
+        createdAt: new Date().toISOString()
+      };
+
+      await saveUser(user);
+
+      const token = signToken(user);
+
+      return res.status(201).json({
+        success: true,
+        message: 'Account registered successfully',
+        token,
+        user: publicUser(user)
+      });
+    } catch (err) {
+      console.error('Registration error:', err);
+      return res.status(500).json({ message: err.message || 'Registration failed' });
+    }
   }
 );
 
@@ -836,17 +958,25 @@ router.post(
       // Find Firestore user
       // ----------------------------------------
 
-      const snapshot =
-        await usersCollection
-          .doc(req.user.id)
-          .get();
+      let user = null;
 
+      if (snapshot.exists) {
+        user = {
+          id: snapshot.id,
+          ...snapshot.data()
+        };
+      } else {
+        const legacyUser = await db.findById('users', req.user.id);
+        if (legacyUser) {
+          user = legacyUser;
+        }
+      }
 
       // ----------------------------------------
       // User not found
       // ----------------------------------------
 
-      if (!snapshot.exists) {
+      if (!user) {
 
         return res.status(404).json({
           message:
@@ -854,16 +984,6 @@ router.post(
         });
 
       }
-
-
-      const user = {
-
-        id:
-          snapshot.id,
-
-        ...snapshot.data()
-
-      };
 
 
       // ----------------------------------------
@@ -1544,6 +1664,36 @@ router.delete(
 
     }
 
+  }
+);
+
+// ============================================
+// LOGOUT
+// ============================================
+//
+// POST /api/auth/logout
+// GET  /api/auth/logout
+//
+// Safe signout endpoint. Allowed even if mustChangePassword === true.
+// ============================================
+
+router.post(
+  '/logout',
+  (req, res) => {
+    return res.json({
+      success: true,
+      message: 'Logged out successfully'
+    });
+  }
+);
+
+router.get(
+  '/logout',
+  (req, res) => {
+    return res.json({
+      success: true,
+      message: 'Logged out successfully'
+    });
   }
 );
 

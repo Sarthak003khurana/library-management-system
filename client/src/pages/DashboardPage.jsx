@@ -63,7 +63,7 @@ export default function DashboardPage() {
     (r) => r.dueDate && new Date(r.dueDate) < new Date()
   ).length;
   const unpaidFinesTotal = fines
-    .filter((f) => f.status === 'unpaid')
+    .filter((f) => !f.paid && f.status !== 'paid')
     .reduce((sum, f) => sum + (Number(f.amount) || 0), 0);
 
   const handleOpenReturn = (reservation) => {

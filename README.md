@@ -510,12 +510,13 @@ Stored in the `fines` collection with:
 - **Admin only** (`POST /api/auth/admin/create-user`)
 - Form fields: Full Name, Email, Role
 - System generates a **temporary password** (9 random bytes, base64url)
-- Password is **bcrypt-hashed** and stored; plain text is shown once in the UI
-- Account creation email is sent via Gmail
+- Password is **bcrypt-hashed** and stored with `mustChangePassword: true`
+- Temporary credentials are delivered securely by email and are **never returned as plaintext in the API response** or displayed in the UI
+- Account creation email is sent via configured provider (Gmail or Resend)
 
 ### Email Notification
-- HTML + plain text email with login URL, credentials, and temporary password warning
-- If email fails, user is still created; admin sees the password in the UI
+- HTML + plain text email with login URL, credentials, and mandatory password change notice
+- If email delivery fails, the user record is still created with `emailDeliveryStatus: "failed"`, and the administrator can trigger redelivery via the **Resend Credentials** button (`POST /api/auth/admin/resend-credentials/:id`)
 
 ### User List
 - Table shows: Name, Email, Role, Password Status, Reliability Score
@@ -961,11 +962,15 @@ If you manually create these users in Firestore (passwords are bcrypt hashes of 
 |--------|----------|------|------|------|----------|---------|
 | `POST` | `/api/auth/login` | No | Any | `{ email, password }` | `{ token, user, mustChangePassword }` | Email/password login |
 | `POST` | `/api/auth/google` | No | Any | `{ firebaseToken }` | `{ token, user, mustChangePassword }` | Google login |
-| `POST` | `/api/auth/change-password` | Yes | Any | `{ currentPassword, newPassword }` | `{ message, token, user }` | Change password |
+| `POST` | `/api/auth/change-password` | Yes | Any | `{ currentPassword, newPassword }` | `{ message, token, user, mustChangePassword }` | Change password (min 8 chars) |
+| `POST` | `/api/auth/logout` | Yes/No | Any | — | `{ success, message }` | Safe sign out |
 | `GET` | `/api/auth/me` | Yes | Any | — | User object | Get current user |
-| `POST` | `/api/auth/admin/create-user` | Yes | `admin` | `{ name, email, role }` | `{ message, user, temporaryPassword }` | Create user |
+| `POST` | `/api/auth/admin/create-user` | Yes | `admin` | `{ name, email, role }` | `{ success, message, emailSent, user, emailError? }` | Create user (credentials emailed, never in response) |
+| `POST` | `/api/auth/admin/resend-credentials/:id` | Yes | `admin` | — | `{ success, message, emailSent }` | Resend temporary credentials email |
 | `GET` | `/api/auth/users` | Yes | `admin` | — | User[] | List all users |
 | `DELETE` | `/api/auth/users/:id` | Yes | `admin` | — | `{ message, deletedUser }` | Delete user |
+
+> **Account Creation Response Contract & Security:** The `POST /api/auth/admin/create-user` endpoint provisions a user account and generates a cryptographically random temporary password. Temporary credentials are delivered solely by email and are **never returned as plaintext in the API response** or exposed in the UI. If email dispatch succeeds, `emailSent: true` is returned. If delivery encounters an error, `emailSent: false` and `emailError` are returned, and administrators can retry delivery using `POST /api/auth/admin/resend-credentials/:id`. Authenticated users with `mustChangePassword === true` are blocked from normal application APIs until they update their password via `/api/auth/change-password`.
 
 ### Items
 
@@ -1096,8 +1101,8 @@ If you manually create these users in Firestore (passwords are bcrypt hashes of 
 2. Click **+ Create User**
 3. Enter name, email, and role
 4. Click **Create Account**
-5. The temporary password is displayed once — copy it securely
-6. An email is also sent to the user
+5. Temporary credentials are automatically emailed to the user (never returned or displayed as plaintext)
+6. If email delivery fails, click **Resend** in the user list to dispatch fresh credentials
 
 ### Manage Items
 1. Navigate to **Manage Items** (`/admin/items`)

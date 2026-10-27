@@ -12,23 +12,42 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { API } from '../services/api.js';
 import { useToast } from '../context/ToastContext.jsx';
+import { SessionStorage } from '../utils/storage.js';
 import ItemCard from '../components/catalog/ItemCard.jsx';
 import LoadingSpinner from '../components/common/LoadingSpinner.jsx';
 import EmptyState from '../components/common/EmptyState.jsx';
 
 export default function CatalogPage() {
-  const { success, error } = useToast();
+  const { success, error, info } = useToast();
   const searchInputRef = useRef(null);
 
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [actionLoadingId, setActionLoadingId] = useState(null);
+  const [exporting, setExporting] = useState(false);
 
-  // Filters
-  const [search, setSearch] = useState('');
-  const [typeFilter, setTypeFilter] = useState('all');
-  const [categoryFilter, setCategoryFilter] = useState('all');
-  const [availabilityFilter, setAvailabilityFilter] = useState('all');
+  // Filters initialized from SessionStorage (Syllabus Point 29-30 & Lab 3)
+  const [search, setSearch] = useState(() => SessionStorage.get('rh_catalog_search', ''));
+  const [typeFilter, setTypeFilter] = useState(() => SessionStorage.get('rh_catalog_type', 'all'));
+  const [categoryFilter, setCategoryFilter] = useState(() => SessionStorage.get('rh_catalog_category', 'all'));
+  const [availabilityFilter, setAvailabilityFilter] = useState(() => SessionStorage.get('rh_catalog_avail', 'all'));
+
+  // Sync filter changes to SessionStorage
+  useEffect(() => {
+    SessionStorage.set('rh_catalog_search', search);
+  }, [search]);
+
+  useEffect(() => {
+    SessionStorage.set('rh_catalog_type', typeFilter);
+  }, [typeFilter]);
+
+  useEffect(() => {
+    SessionStorage.set('rh_catalog_category', categoryFilter);
+  }, [categoryFilter]);
+
+  useEffect(() => {
+    SessionStorage.set('rh_catalog_avail', availabilityFilter);
+  }, [availabilityFilter]);
 
   const fetchItems = async () => {
     try {
@@ -72,8 +91,11 @@ export default function CatalogPage() {
       // Category
       if (categoryFilter !== 'all' && item.category !== categoryFilter) return false;
       // Availability
-      if (availabilityFilter === 'available' && (item.availableQuantity || 0) <= 0) return false;
-      if (availabilityFilter === 'unavailable' && (item.availableQuantity || 0) > 0) return false;
+      const isItemAvailable = item.type === 'book'
+        ? (item.availableQuantity || 0) > 0
+        : (item.status === 'available');
+      if (availabilityFilter === 'available' && !isItemAvailable) return false;
+      if (availabilityFilter === 'unavailable' && isItemAvailable) return false;
       // Search term
       if (search.trim()) {
         const query = search.toLowerCase();
@@ -113,6 +135,30 @@ export default function CatalogPage() {
     }
   };
 
+  const handleExportCsv = async () => {
+    setExporting(true);
+    try {
+      info('Streaming catalog CSV export via Node.js streams...');
+      const response = await API.client.get('/api/items/export/csv', {
+        responseType: 'blob'
+      });
+      const blob = new Blob([response.data], { type: 'text/csv;charset=utf-8;' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `resourcehub-catalog-${new Date().toISOString().split('T')[0]}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      success('Catalog CSV exported successfully via Node.js stream!');
+    } catch (err) {
+      error(err.message || 'Failed to export CSV');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Header */}
@@ -125,8 +171,19 @@ export default function CatalogPage() {
             Search and check out books or view laboratory equipment schedule.
           </p>
         </div>
-        <div className="text-xs font-semibold px-4 py-2 rounded-2xl bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 self-start sm:self-auto border border-indigo-100 dark:border-indigo-900">
-          Showing {filteredItems.length} of {items.length} resources
+        <div className="flex items-center gap-2 self-start sm:self-auto">
+          <button
+            type="button"
+            disabled={exporting}
+            onClick={handleExportCsv}
+            className="text-xs font-semibold px-4 py-2 rounded-2xl bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750 transition-colors shadow-sm disabled:opacity-50"
+            title="Download full catalog using Node.js streaming pipeline"
+          >
+            {exporting ? 'Streaming...' : '📥 Export CSV (Stream)'}
+          </button>
+          <div className="text-xs font-semibold px-4 py-2 rounded-2xl bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-100 dark:border-indigo-900">
+            Showing {filteredItems.length} of {items.length} resources
+          </div>
         </div>
       </div>
 

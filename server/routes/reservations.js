@@ -87,6 +87,41 @@ function rangesOverlap(
 
 
 // ============================================
+// EQUIPMENT RESERVATION SCHEDULE
+// Privacy-safe endpoint returning occupied slots for equipment
+// without exposing borrower identities.
+// ============================================
+router.get(
+  '/equipment-schedule',
+  requireAuth,
+  async (req, res) => {
+    try {
+      const snapshot = await reservationsCollection.get();
+      const currentUserId = req.user.id;
+
+      const schedule = snapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() }))
+        .filter(r => r.status === 'active' || r.status === 'borrowed')
+        .map(r => ({
+          id: r.id,
+          itemId: r.itemId,
+          itemType: r.itemType,
+          startDate: r.startDate || r.borrowedAt || r.createdAt,
+          endDate: r.endDate || r.dueDate,
+          status: r.status,
+          isMine: r.userId === currentUserId
+        }));
+
+      return res.json(schedule);
+    } catch (err) {
+      console.error('Equipment schedule error:', err);
+      return res.status(500).json({ message: 'Could not load equipment schedule' });
+    }
+  }
+);
+
+
+// ============================================
 // GET ALL RESERVATIONS
 //
 // Normal users:
@@ -1203,6 +1238,9 @@ router.post(
 
             paid:
               false,
+
+            status:
+              'unpaid',
 
             createdAt:
               new Date().toISOString()

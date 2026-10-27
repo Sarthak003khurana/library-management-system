@@ -21,8 +21,13 @@ const reservationRoutes = require('./routes/reservations');
 const waitlistRoutes = require('./routes/waitlist');
 const finesRoutes = require('./routes/fines');
 const analyticsRoutes = require('./routes/analytics');
+const { initMongoDB } = require('./mongodb');
+const mongoDemoRoutes = require('./routes/mongoDemo');
 
 const app = express();
+
+// Initialize isolated MongoDB demo if MONGO_URI is configured
+initMongoDB();
 
 // Render provides process.env.PORT.
 // 5000 is used when running locally.
@@ -37,9 +42,28 @@ const STATIC_DIR = fs.existsSync(CLIENT_DIST) ? CLIENT_DIST : CLIENT_DIR;
 // MIDDLEWARE
 // ============================================
 
-// CORS enabled for React + Vite development and external access (Point 56 & 60)
+// Production & local development CORS configuration
+const rawCorsOrigin = process.env.CORS_ORIGIN || '';
+const configuredOrigins = rawCorsOrigin
+  ? rawCorsOrigin.split(',').map((o) => o.trim())
+  : ['http://localhost:5173', 'http://localhost:5000', 'http://localhost:3000', 'http://127.0.0.1:5173'];
+
 app.use(cors({
-  origin: true,
+  origin: (origin, callback) => {
+    // Non-browser or same-origin requests have no origin header
+    if (!origin) return callback(null, true);
+
+    // Development allows localhost origins
+    if (process.env.NODE_ENV !== 'production') {
+      return callback(null, true);
+    }
+
+    if (configuredOrigins.includes(origin) || configuredOrigins.includes('*')) {
+      return callback(null, true);
+    }
+
+    return callback(new Error(`CORS error: Origin ${origin} not permitted`));
+  },
   credentials: true
 }));
 
@@ -68,6 +92,8 @@ app.use('/api/waitlist', waitlistRoutes);
 app.use('/api/fines', finesRoutes);
 
 app.use('/api/analytics', analyticsRoutes);
+
+app.use('/api/mongo-demo', mongoDemoRoutes);
 
 // ============================================
 // HEALTH CHECK

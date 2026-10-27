@@ -37,7 +37,7 @@ export default function FinesPage() {
   }, [fetchFines]);
 
   const unpaidTotal = fines
-    .filter((f) => f.status === 'unpaid')
+    .filter((f) => !f.paid && f.status !== 'paid')
     .reduce((sum, f) => sum + (Number(f.amount) || 0), 0);
 
   const handlePayFine = async (fineId) => {
@@ -107,7 +107,7 @@ export default function FinesPage() {
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                 {fines.map((fine) => {
-                  const isUnpaid = fine.status === 'unpaid';
+                  const isUnpaid = !fine.paid && fine.status !== 'paid';
                   return (
                     <tr key={fine.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-850 transition-colors">
                       <td className="py-4 px-6 font-bold text-slate-900 dark:text-slate-100">
@@ -132,7 +132,7 @@ export default function FinesPage() {
 
                       <td className="py-4 px-6">
                         <Badge variant={isUnpaid ? 'danger' : 'success'}>
-                          {fine.status ? fine.status.toUpperCase() : 'PAID'}
+                          {isUnpaid ? 'UNPAID' : 'PAID'}
                         </Badge>
                       </td>
 

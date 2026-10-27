@@ -30,12 +30,14 @@ let resendClient = null;
 // ============================================
 
 function getEmailProvider() {
-
-  return (
-    process.env.EMAIL_PROVIDER ||
-    'gmail'
-  ).toLowerCase().trim();
-
+  if (process.env.EMAIL_PROVIDER) {
+    return process.env.EMAIL_PROVIDER.toLowerCase().trim();
+  }
+  // Auto-detect provider if not explicitly specified
+  if (process.env.RESEND_API_KEY) {
+    return 'resend';
+  }
+  return 'gmail';
 }
 
 
@@ -44,48 +46,29 @@ function getEmailProvider() {
 // ============================================
 
 function getGmailTransporter() {
-
   if (!process.env.EMAIL_USER) {
-
-    throw new Error(
-      'EMAIL_USER is not configured.'
-    );
-
+    throw new Error('EMAIL_USER is not configured.');
   }
 
   if (!process.env.EMAIL_APP_PASSWORD) {
-
-    throw new Error(
-      'EMAIL_APP_PASSWORD is not configured.'
-    );
-
+    throw new Error('EMAIL_APP_PASSWORD is not configured.');
   }
-
 
   if (!gmailTransporter) {
-
-    gmailTransporter =
-      nodemailer.createTransport({
-
-        service: 'gmail',
-
-        auth: {
-
-          user:
-            process.env.EMAIL_USER,
-
-          pass:
-            process.env.EMAIL_APP_PASSWORD
-
-        }
-
-      });
-
+    gmailTransporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_APP_PASSWORD,
+      },
+      // Timeout settings to prevent hangs on network or credential issues
+      connectionTimeout: 10000,
+      greetingTimeout: 10000,
+      socketTimeout: 15000,
+    });
   }
 
-
   return gmailTransporter;
-
 }
 
 
@@ -197,38 +180,25 @@ async function verifyEmailConfiguration() {
 
 
     if (!process.env.EMAIL_FROM) {
-
       console.warn(
-        '⚠️ EMAIL_FROM is missing.'
+        '⚠️ EMAIL_FROM is not explicitly set; defaulting to "ResourceHub <onboarding@resend.dev>".'
       );
-
-      return false;
-
     }
 
-
     try {
-
       getResendClient();
-
       console.log(
         '✓ Resend email service initialized successfully'
       );
-
       return true;
-
     }
     catch (error) {
-
       console.error(
         '✕ Resend email service initialization failed:',
         error.message
       );
-
       return false;
-
     }
-
   }
 
 
@@ -246,6 +216,26 @@ async function verifyEmailConfiguration() {
 
   return false;
 
+}
+
+
+// ============================================
+// HTML ESCAPING HELPER
+// ============================================
+// Reusable HTML escaping helper. Escapes &, <, >, ", and '.
+// Prevents HTML injection / XSS in rendered email clients.
+// ============================================
+
+function escapeHtml(str) {
+  if (str === null || str === undefined) {
+    return '';
+  }
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 
@@ -292,6 +282,8 @@ function buildEmailContent({
   // ==========================================
   // PLAIN TEXT EMAIL
   // ==========================================
+  // Unescaped plain text preserves natural readability
+  // and original layout without HTML entity encoding.
 
   const text = `
 
@@ -345,6 +337,13 @@ ResourceHub Administration
   // ==========================================
   // HTML EMAIL
   // ==========================================
+  // User-controlled values are safely HTML-escaped.
+  // loginUrl is preserved directly without alteration or double-escaping.
+
+  const safeName = escapeHtml(name);
+  const safeEmail = escapeHtml(email);
+  const safeRoleName = escapeHtml(roleName);
+  const safeTemporaryPassword = escapeHtml(temporaryPassword);
 
   const html = `
 
@@ -426,7 +425,7 @@ ResourceHub Administration
 
 
       <p>
-        Hello <strong>${name}</strong>,
+        Hello <strong>${safeName}</strong>,
       </p>
 
 
@@ -450,17 +449,17 @@ ResourceHub Administration
 
         <p>
           <strong>Name:</strong>
-          ${name}
+          ${safeName}
         </p>
 
         <p>
           <strong>Email:</strong>
-          ${email}
+          ${safeEmail}
         </p>
 
         <p>
           <strong>Role:</strong>
-          ${roleName}
+          ${safeRoleName}
         </p>
 
       </div>
@@ -502,7 +501,7 @@ ResourceHub Administration
             letter-spacing:1px;
           "
         >
-          ${temporaryPassword}
+          ${safeTemporaryPassword}
         </div>
 
 
@@ -599,182 +598,107 @@ ResourceHub Administration
 // ============================================
 
 async function sendAccountCreationEmail({
-
   name,
   email,
   role,
   temporaryPassword,
-  loginUrl
-
+  loginUrl,
 }) {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!email || !emailRegex.test(email)) {
+    throw new Error(`Invalid recipient email address: "${email}"`);
+  }
 
-  const provider =
-    getEmailProvider();
+  const provider = getEmailProvider();
 
-
-  const {
-    text,
-    html
-  } =
-    buildEmailContent({
-
-      name,
-      email,
-      role,
-      temporaryPassword,
-      loginUrl
-
-    });
-
+  const { text, html } = buildEmailContent({
+    name,
+    email,
+    role,
+    temporaryPassword,
+    loginUrl,
+  });
 
   // ==========================================
   // GMAIL
   // ==========================================
 
   if (provider === 'gmail') {
-
-    const transporter =
-      getGmailTransporter();
-
+    const transporter = getGmailTransporter();
 
     const mailOptions = {
-
       from: {
-
-        name:
-          'ResourceHub',
-
-        address:
-          process.env.EMAIL_USER
-
+        name: 'ResourceHub',
+        address: process.env.EMAIL_USER,
       },
-
-      to:
-        email,
-
-      subject:
-        'Your ResourceHub Account Has Been Created',
-
+      to: email,
+      subject: 'Your ResourceHub Account Has Been Created',
       text,
-
-      html
-
+      html,
     };
 
-
     try {
-
-      const result =
-        await transporter.sendMail(
-          mailOptions
-        );
-
+      const result = await transporter.sendMail(mailOptions);
 
       console.log(
         `✓ Account creation email sent to ${email} using Gmail`
       );
 
-
       if (result.messageId) {
-
-        console.log(
-          `✓ Gmail message ID: ${result.messageId}`
-        );
-
+        console.log(`✓ Gmail message ID: ${result.messageId}`);
       }
 
-
       return result;
-
-    }
-    catch (error) {
-
+    } catch (error) {
       console.error(
         `✕ Gmail email failed for ${email}:`,
         error.message
       );
-
       throw error;
-
     }
-
   }
-
 
   // ==========================================
   // RESEND
   // ==========================================
 
   if (provider === 'resend') {
+    const fromAddress =
+      process.env.EMAIL_FROM || 'ResourceHub <onboarding@resend.dev>';
 
-    if (!process.env.EMAIL_FROM) {
-
-      throw new Error(
-        'EMAIL_FROM is not configured for Resend.'
-      );
-
-    }
-
-
-    const resend =
-      getResendClient();
-
+    const resend = getResendClient();
 
     try {
-
-      const result =
-        await resend.emails.send({
-
-          from:
-            process.env.EMAIL_FROM,
-
-          to:
-            [email],
-
-          subject:
-            'Your ResourceHub Account Has Been Created',
-
-          text,
-
-          html
-
-        });
-
+      const result = await resend.emails.send({
+        from: fromAddress,
+        to: [email],
+        subject: 'Your ResourceHub Account Has Been Created',
+        text,
+        html,
+      });
 
       if (result.error) {
-
         throw new Error(
-          result.error.message ||
-          'Resend failed to send the email.'
+          result.error.message || 'Resend failed to send the email.'
         );
-
       }
-
 
       console.log(
         `✓ Account creation email sent to ${email} using Resend`
       );
 
-
       console.log(
         `✓ Resend email ID: ${result.data?.id || 'unknown'}`
       );
 
-
       return result.data;
-
-    }
-    catch (error) {
-
+    } catch (error) {
       console.error(
         `✕ Resend email failed for ${email}:`,
         error.message
       );
-
       throw error;
-
     }
-
   }
 
 
@@ -795,6 +719,10 @@ async function sendAccountCreationEmail({
 // ============================================
 
 module.exports = {
+
+  escapeHtml,
+
+  buildEmailContent,
 
   sendAccountCreationEmail,
 

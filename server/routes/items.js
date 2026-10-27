@@ -37,6 +37,7 @@
 
 const express = require('express');
 const crypto = require('crypto');
+const { Readable } = require('stream');
 
 const {
   firestore
@@ -329,6 +330,97 @@ router.get(
 
     }
 
+  }
+);
+
+
+// ============================================
+// EXPORT CATALOG CSV (STREAMING)
+// Covers Syllabus:
+// - Point 34 & Lab 9: Node.js Streams & stream.Readable
+// - Point 35: HTTP Response Headers & Streaming Data
+// ============================================
+
+function escapeCsvField(val) {
+  if (val === null || val === undefined) return '';
+  const str = String(val);
+  if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+  return str;
+}
+
+router.get(
+  '/export/csv',
+  requireAuth,
+  async (req, res) => {
+    try {
+      const snapshot = await itemsCollection.get();
+      const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', 'attachment; filename="resourcehub-catalog.csv"');
+      res.setHeader('Cache-Control', 'no-cache');
+
+      const headers = [
+        'id',
+        'title',
+        'type',
+        'category',
+        'status',
+        'location',
+        'quantity',
+        'availableQuantity',
+        'finePerDay',
+        'isbn',
+        'author',
+        'conditionRating'
+      ];
+
+      // Create readable stream for streaming response
+      const csvStream = new Readable({
+        read() {}
+      });
+
+      csvStream.pipe(res);
+
+      // Header row
+      csvStream.push(headers.join(',') + '\r\n');
+
+      // Item data rows
+      for (const item of items) {
+        const row = [
+          escapeCsvField(item.id),
+          escapeCsvField(item.title),
+          escapeCsvField(item.type),
+          escapeCsvField(item.category),
+          escapeCsvField(item.status),
+          escapeCsvField(item.location),
+          escapeCsvField(item.quantity ?? 1),
+          escapeCsvField(item.availableQuantity ?? item.quantity ?? 1),
+          escapeCsvField(item.finePerDay || (item.type === 'equipment' ? 10 : 3)),
+          escapeCsvField(item.isbn || ''),
+          escapeCsvField(item.author || ''),
+          escapeCsvField(item.conditionRating || 10)
+        ];
+        csvStream.push(row.join(',') + '\r\n');
+      }
+
+      // Signal stream completion
+      csvStream.push(null);
+
+      eventHub.emit('audit:log', {
+        action: 'CATALOG_EXPORT_CSV_STREAMED',
+        userId: req.user.id,
+        details: { count: items.length }
+      });
+    } catch (err) {
+      console.error('CSV stream export error:', err);
+      if (!res.headersSent) {
+        return res.status(500).json({ message: 'Failed to stream catalog export' });
+      }
+      res.end();
+    }
   }
 );
 

@@ -29,6 +29,7 @@ export default function AdminUsersPage() {
   // Modal
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
+  const [resendingId, setResendingId] = useState(null);
 
   const fetchUsers = useCallback(async () => {
     try {
@@ -59,6 +60,19 @@ export default function AdminUsersPage() {
       return true;
     });
   }, [users, roleFilter, search]);
+
+  const handleResendCredentials = async (user) => {
+    setResendingId(user.id);
+    try {
+      const res = await API.post(`/api/auth/admin/resend-credentials/${encodeURIComponent(user.id)}`);
+      success(res.message || `Credentials emailed to ${user.email}`);
+      fetchUsers();
+    } catch (err) {
+      error(err.message || `Failed to dispatch credentials to ${user.email}`);
+    } finally {
+      setResendingId(null);
+    }
+  };
 
   const handleDelete = async (user) => {
     if (user.id === currentUser?.id) {
@@ -165,6 +179,7 @@ export default function AdminUsersPage() {
                   <th className="py-4 px-6">User Profile</th>
                   <th className="py-4 px-6">System Role</th>
                   <th className="py-4 px-6">Password Status</th>
+                  <th className="py-4 px-6">Email Delivery</th>
                   <th className="py-4 px-6">Account ID</th>
                   <th className="py-4 px-6 text-right">Actions</th>
                 </tr>
@@ -215,8 +230,26 @@ export default function AdminUsersPage() {
                           </span>
                         ) : (
                           <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
-                            <span>✓</span> Verified
+                            <span>✓</span> Verified Active
                           </span>
+                        )}
+                      </td>
+
+                      <td className="py-4 px-6">
+                        {u.emailDeliveryStatus === 'sent' ? (
+                          <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
+                            <span>✓</span> Delivered
+                          </span>
+                        ) : u.emailDeliveryStatus === 'failed' ? (
+                          <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-rose-600 dark:text-rose-400" title={u.emailError || 'Failed to dispatch email'}>
+                            <span>✕</span> Failed
+                          </span>
+                        ) : u.emailDeliveryStatus === 'pending' ? (
+                          <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-600 dark:text-amber-400">
+                            <span>⏳</span> Pending
+                          </span>
+                        ) : (
+                          <span className="text-slate-400 text-[11px]">Direct / OAuth</span>
                         )}
                       </td>
 
@@ -225,16 +258,30 @@ export default function AdminUsersPage() {
                       </td>
 
                       <td className="py-4 px-6 text-right">
-                        {!isCurrent && (
-                          <button
-                            type="button"
-                            disabled={deletingId === u.id}
-                            onClick={() => handleDelete(u)}
-                            className="px-3 py-1.5 rounded-xl border border-rose-200 dark:border-rose-900/60 hover:bg-rose-50 dark:hover:bg-rose-950 text-rose-600 font-semibold text-xs transition-colors disabled:opacity-50"
-                          >
-                            {deletingId === u.id ? 'Deleting...' : 'Delete'}
-                          </button>
-                        )}
+                        <div className="flex items-center justify-end gap-2">
+                          {!isCurrent && (u.mustChangePassword || u.emailDeliveryStatus === 'failed') && (
+                            <button
+                              type="button"
+                              disabled={resendingId === u.id}
+                              onClick={() => handleResendCredentials(u)}
+                              className="px-2.5 py-1.5 rounded-xl border border-indigo-200 dark:border-indigo-900/60 hover:bg-indigo-50 dark:hover:bg-indigo-950 text-indigo-600 dark:text-indigo-400 font-semibold text-[11px] transition-colors disabled:opacity-50 flex items-center gap-1"
+                              title="Generate fresh temporary password and dispatch to user email"
+                            >
+                              <span>✉️</span>
+                              {resendingId === u.id ? 'Sending...' : 'Resend Email'}
+                            </button>
+                          )}
+                          {!isCurrent && (
+                            <button
+                              type="button"
+                              disabled={deletingId === u.id}
+                              onClick={() => handleDelete(u)}
+                              className="px-3 py-1.5 rounded-xl border border-rose-200 dark:border-rose-900/60 hover:bg-rose-50 dark:hover:bg-rose-950 text-rose-600 font-semibold text-xs transition-colors disabled:opacity-50"
+                            >
+                              {deletingId === u.id ? 'Deleting...' : 'Delete'}
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );

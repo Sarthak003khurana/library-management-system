@@ -19,6 +19,7 @@ import AppLayout from './layouts/AppLayout.jsx';
 import AuthPage from './pages/AuthPage.jsx';
 import DashboardPage from './pages/DashboardPage.jsx';
 import CatalogPage from './pages/CatalogPage.jsx';
+import ItemDetailPage from './pages/ItemDetailPage.jsx';
 import TimelinePage from './pages/TimelinePage.jsx';
 import WaitlistPage from './pages/WaitlistPage.jsx';
 import FinesPage from './pages/FinesPage.jsx';
@@ -46,6 +47,7 @@ export default function App() {
             {/* User Routes */}
             <Route index element={<DashboardPage />} />
             <Route path="catalog" element={<CatalogPage />} />
+            <Route path="catalog/:id" element={<ItemDetailPage />} />
             <Route path="timeline" element={<TimelinePage />} />
             <Route path="waitlist" element={<WaitlistPage />} />
             <Route path="fines" element={<FinesPage />} />

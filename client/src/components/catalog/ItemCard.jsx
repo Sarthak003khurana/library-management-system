@@ -14,7 +14,9 @@ export default function ItemCard({ item, onBorrow, onJoinWaitlist, loadingAction
   const navigate = useNavigate();
 
   const isBook = item.type === 'book';
-  const isAvailable = (item.availableQuantity || 0) > 0;
+  const isAvailable = isBook
+    ? (item.availableQuantity || 0) > 0
+    : (item.status === 'available');
   const conditionRating = item.conditionRating || 10;
 
   return (
@@ -27,12 +29,18 @@ export default function ItemCard({ item, onBorrow, onJoinWaitlist, loadingAction
           </Badge>
 
           <Badge variant={isAvailable ? 'success' : 'danger'} size="sm">
-            {isAvailable ? `${item.availableQuantity} Available` : 'Out of Stock'}
+            {isBook
+              ? (isAvailable ? `${item.availableQuantity} Available` : 'Out of Stock')
+              : (isAvailable ? 'Available for Booking' : (item.status === 'maintenance' ? 'Maintenance' : 'In Use'))}
           </Badge>
         </div>
 
         {/* Thumbnail / Icon Cover */}
-        <div className="w-full h-36 rounded-2xl bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-slate-800 dark:to-indigo-950/30 flex items-center justify-center text-4xl mb-4 overflow-hidden border border-slate-100 dark:border-slate-800/60 shadow-inner">
+        <div
+          onClick={() => navigate(`/catalog/${item.id}`)}
+          className="w-full h-36 rounded-2xl bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-slate-800 dark:to-indigo-950/30 flex items-center justify-center text-4xl mb-4 overflow-hidden border border-slate-100 dark:border-slate-800/60 shadow-inner cursor-pointer"
+          title="View resource details"
+        >
           {item.coverUrl ? (
             <img
               src={item.coverUrl}
@@ -51,7 +59,11 @@ export default function ItemCard({ item, onBorrow, onJoinWaitlist, loadingAction
         <span className="text-[11px] font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
           {item.category || 'General'}
         </span>
-        <h3 className="text-base font-bold text-slate-900 dark:text-slate-100 mt-1 line-clamp-2 leading-snug">
+        <h3
+          onClick={() => navigate(`/catalog/${item.id}`)}
+          className="text-base font-bold text-slate-900 dark:text-slate-100 mt-1 line-clamp-2 leading-snug cursor-pointer hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+          title="View resource details"
+        >
           {item.title}
         </h3>
 

@@ -31,3 +31,40 @@ export const Storage = {
     localStorage.clear();
   }
 };
+
+export const SessionStorage = {
+  set(key, value) {
+    try {
+      sessionStorage.setItem(key, JSON.stringify(value));
+    } catch (err) {
+      console.warn(`Error writing ${key} to sessionStorage:`, err);
+    }
+  },
+
+  get(key, fallback = null) {
+    try {
+      const raw = sessionStorage.getItem(key);
+      if (raw === null || raw === undefined) return fallback;
+      return JSON.parse(raw);
+    } catch {
+      return fallback;
+    }
+  },
+
+  remove(key) {
+    try {
+      sessionStorage.removeItem(key);
+    } catch (err) {
+      console.warn(`Error removing ${key} from sessionStorage:`, err);
+    }
+  },
+
+  clear() {
+    try {
+      sessionStorage.clear();
+    } catch (err) {
+      console.warn('Error clearing sessionStorage:', err);
+    }
+  }
+};
+
