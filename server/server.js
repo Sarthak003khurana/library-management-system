@@ -42,45 +42,14 @@ const STATIC_DIR = fs.existsSync(CLIENT_DIST) ? CLIENT_DIST : CLIENT_DIR;
 // MIDDLEWARE
 // ============================================
 
-// Production & local development CORS configuration
-const rawCorsOrigin = process.env.CORS_ORIGIN || '';
-const configuredOrigins = rawCorsOrigin
-  ? rawCorsOrigin.split(',').map((o) => o.trim())
-  : ['http://localhost:5173', 'http://localhost:5000', 'http://localhost:3000', 'http://127.0.0.1:5173'];
-
+// ============================================
+// CORS CONFIGURATION
+// ============================================
+// Allow all origins dynamically while supporting credentials (cookies / auth headers).
+// Reflecting the incoming origin guarantees that any deployment domain
+// (e.g. https://sarthak.sbs, Vercel, localhost, custom domains) is permitted.
 const corsOptions = {
-  origin: (origin, callback) => {
-    // Non-browser or same-origin requests have no origin header
-    if (!origin) return callback(null, true);
-
-    // Development allows localhost origins
-    if (process.env.NODE_ENV !== 'production') {
-      return callback(null, true);
-    }
-
-    // Automatically allow all Vercel production and preview deployment URLs
-    try {
-      const parsedOrigin = new URL(origin);
-      if (
-        parsedOrigin.hostname === 'vercel.app' ||
-        parsedOrigin.hostname.endsWith('.vercel.app')
-      ) {
-        return callback(null, true);
-      }
-    } catch (_) {}
-
-    // Check explicitly configured origins (exact match or wildcard domain)
-    for (const allowed of configuredOrigins) {
-      if (allowed === '*' || allowed === origin) {
-        return callback(null, true);
-      }
-      if (allowed.startsWith('*.') && origin.endsWith(allowed.slice(1))) {
-        return callback(null, true);
-      }
-    }
-
-    return callback(new Error(`CORS error: Origin ${origin} not permitted`));
-  },
+  origin: true,
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
