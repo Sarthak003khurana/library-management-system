@@ -108,17 +108,15 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// Centralized error handler middleware (Point 56)
-app.use(errorHandler);
-
 // ============================================
 // SPA FALLBACK
 // ============================================
 
-app.get('*', (req, res) => {
+app.get('*', (req, res, next) => {
   // Never return index.html for an unknown API route.
   if (req.path.startsWith('/api/')) {
     return res.status(404).json({
+      success: false,
       message: 'API endpoint not found'
     });
   }
@@ -127,8 +125,16 @@ app.get('*', (req, res) => {
     ? path.join(STATIC_DIR, 'index.html')
     : path.join(CLIENT_DIR, 'index.html');
 
-  res.sendFile(indexPath);
+  res.sendFile(indexPath, (err) => {
+    if (err) {
+      next(err);
+    }
+  });
 });
+
+// Centralized error handler middleware (Point 56)
+app.use(errorHandler);
+
 
 // ============================================
 // START SERVER
