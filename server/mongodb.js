@@ -20,13 +20,53 @@ function sanitizeCredentials(str) {
     .replace(/:\/\/.*@/gi, '://<redacted-credentials>@');
 }
 
-async function initMongoDB() {
-  const uri = process.env.MONGODB_URI || process.env.MONGO_URI;
+// Safely normalize connection string: handles quotes, prefixes, and unencoded characters
+function normalizeMongoUri(raw) {
+  if (!raw) return '';
+  let uri = String(raw).trim();
+  // Strip surrounding quotes
+  uri = uri.replace(/^['"]|['"]$/g, '').trim();
+  // Strip accidental MONGODB_URI= prefix
+  uri = uri.replace(/^MONGODB_URI=\s*/i, '').trim();
 
-  if (!uri) {
+  const schemeMatch = uri.match(/^(mongodb(?:\+srv)?:\/\/)(.*)$/i);
+  if (!schemeMatch) return uri;
+
+  const scheme = schemeMatch[1];
+  const rest = schemeMatch[2];
+  const lastAt = rest.lastIndexOf('@');
+  if (lastAt === -1) return uri;
+
+  const userinfo = rest.slice(0, lastAt);
+  const hostAndBeyond = rest.slice(lastAt + 1);
+
+  const firstColon = userinfo.indexOf(':');
+  if (firstColon === -1) return uri;
+
+  const rawUser = userinfo.slice(0, firstColon);
+  const rawPass = userinfo.slice(firstColon + 1);
+
+  let decodedUser;
+  try { decodedUser = decodeURIComponent(rawUser); } catch { decodedUser = rawUser; }
+
+  let decodedPass;
+  try { decodedPass = decodeURIComponent(rawPass); } catch { decodedPass = rawPass; }
+
+  const encodedUser = encodeURIComponent(decodedUser);
+  const encodedPass = encodeURIComponent(decodedPass);
+
+  return `${scheme}${encodedUser}:${encodedPass}@${hostAndBeyond}`;
+}
+
+async function initMongoDB() {
+  const rawUri = process.env.MONGODB_URI || process.env.MONGO_URI;
+
+  if (!rawUri) {
     console.log('ℹ️ MongoDB Atlas connector: MONGODB_URI not configured. Operating in Firestore-only mode.');
     return { isConnected: false, status: 'disabled' };
   }
+
+  const uri = normalizeMongoUri(rawUri);
 
   // Reuse active connection if already connected
   if (mongoose.connection.readyState === 1) {
@@ -78,5 +118,6 @@ module.exports = {
   mongoose,
   initMongoDB,
   getMongoStatus,
-  sanitizeCredentials
+  sanitizeCredentials,
+  normalizeMongoUri
 };

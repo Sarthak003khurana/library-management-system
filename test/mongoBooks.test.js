@@ -81,6 +81,8 @@ describe('MongoDB Atlas Book Model & Schema Contract', () => {
 });
 
 describe('MongoDB Connection Configuration & Security', () => {
+  const { normalizeMongoUri } = require('../server/mongodb');
+
   it('should report MongoDB status safely without exposing secrets', () => {
     const status = getMongoStatus();
 
@@ -94,6 +96,17 @@ describe('MongoDB Connection Configuration & Security', () => {
     const serialized = JSON.stringify(status);
     assert.ok(!serialized.includes('mongodb+srv://'), 'Status must never leak connection URI');
     assert.ok(!serialized.includes('password'), 'Status must never leak password');
+  });
+
+  it('should normalize URIs with quotes, prefixes, and unencoded special characters in password', () => {
+    const rawWithQuotes = '"mongodb+srv://user:pass123@cluster0.abc.mongodb.net/resourcehub"';
+    assert.strictEqual(normalizeMongoUri(rawWithQuotes), 'mongodb+srv://user:pass123@cluster0.abc.mongodb.net/resourcehub');
+
+    const rawWithPrefix = 'MONGODB_URI=mongodb+srv://user:pass123@cluster0.abc.mongodb.net/resourcehub';
+    assert.strictEqual(normalizeMongoUri(rawWithPrefix), 'mongodb+srv://user:pass123@cluster0.abc.mongodb.net/resourcehub');
+
+    const rawWithAtInPass = 'mongodb+srv://sarthak:pass@123@cluster0.abc.mongodb.net/resourcehub';
+    assert.strictEqual(normalizeMongoUri(rawWithAtInPass), 'mongodb+srv://sarthak:pass%40123@cluster0.abc.mongodb.net/resourcehub');
   });
 });
 
