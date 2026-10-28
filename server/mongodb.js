@@ -88,6 +88,12 @@ async function initMongoDB() {
     connectionError = null;
     const targetDb = mongoose.connection.name || 'resourcehub';
     console.log(`✓ MongoDB Atlas connected successfully (Cluster0 / Database: ${targetDb})`);
+    try {
+      const { ensureBooksMigrated } = require('./migrate-books-to-mongo');
+      ensureBooksMigrated().catch(err => {
+        console.warn('Post-connect migration check notice:', err.message);
+      });
+    } catch {}
     return { isConnected: true, status: 'connected', dbName: targetDb };
   } catch (err) {
     isConnected = false;

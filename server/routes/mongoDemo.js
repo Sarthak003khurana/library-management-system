@@ -29,7 +29,11 @@ function requireMongo(req, res, next) {
 // --------------------------------------------
 // 1. MODULE STATUS
 // --------------------------------------------
-router.get('/status', (req, res) => {
+router.get('/status', async (req, res) => {
+  const { mongoose, initMongoDB } = require('../mongodb');
+  if (mongoose.connection.readyState !== 1 && (process.env.MONGODB_URI || process.env.MONGO_URI)) {
+    await initMongoDB();
+  }
   const status = getMongoStatus();
   res.json({
     module: 'MongoDB / Mongoose Educational Demonstration',
