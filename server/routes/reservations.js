@@ -68,10 +68,28 @@ const usersCollection =
 const finesCollection =
   firestore.collection('fines');
 
+const { mongoose } = require('../mongodb');
+const Book = require('../models/Book');
+
 
 // ============================================
 // HELPERS
 // ============================================
+
+async function findItemById(itemId) {
+  if (mongoose.connection.readyState === 1) {
+    const book = await Book.findOne({ id: itemId }).lean();
+    if (book) {
+      const { _id, ...rest } = book;
+      return { id: book.id, ...rest, type: book.type || 'book' };
+    }
+  }
+  const itemDoc = await itemsCollection.doc(itemId).get();
+  if (itemDoc.exists) {
+    return { id: itemDoc.id, ...itemDoc.data() };
+  }
+  return null;
+}
 
 function rangesOverlap(
   aStart,
@@ -182,18 +200,10 @@ router.get(
           list.map(
             async reservation => {
 
-              const itemDoc =
-                await itemsCollection
-                  .doc(
-                    reservation.itemId
-                  )
-                  .get();
-
-
               const item =
-                itemDoc.exists
-                  ? itemDoc.data()
-                  : null;
+                await findItemById(
+                  reservation.itemId
+                );
 
 
               return {
@@ -299,29 +309,18 @@ router.post(
 
 
       // ----------------------------------------
-      // Get item from Firestore
+      // Get item
       // ----------------------------------------
 
-      const itemDoc =
-        await itemsCollection
-          .doc(itemId)
-          .get();
+      const item =
+        await findItemById(itemId);
 
-
-      if (!itemDoc.exists) {
-
+      if (!item) {
         return res.status(404).json({
           message:
             'Item not found'
         });
-
       }
-
-
-      const item = {
-        id: itemDoc.id,
-        ...itemDoc.data()
-      };
 
 
       const now =
@@ -613,129 +612,116 @@ router.post(
       // ========================================
 
       if (item.type === 'book') {
+        if (mongoose.connection.readyState === 1) {
+          // Atomic MongoDB loan operation: decrements availableQuantity safely
+          const updatedBook = await Book.findOneAndUpdate(
+            { id: item.id, availableQuantity: { $gt: 0 } },
+            {
+              $inc: { availableQuantity: -1 },
+              $set: { updatedAt: new Date().toISOString() }
+            },
+            { new: true }
+          );
 
-        await firestore.runTransaction(
-          async transaction => {
-
-            const transactionItemRef =
-              itemsCollection.doc(
-                item.id
-              );
-
-
-            const latestItemDoc =
-              await transaction.get(
-                transactionItemRef
-              );
-
-
-            if (
-              !latestItemDoc.exists
-            ) {
-
-              throw new Error(
-                'Item not found'
-              );
-
-            }
-
-
-            const latestItem =
-              latestItemDoc.data();
-
-
-            const totalQuantity =
-              Number(
-                latestItem.quantity ??
-                1
-              );
-
-
-            const currentAvailable =
-              Number(
-                latestItem.availableQuantity ??
-                totalQuantity
-              );
-
-
-            // ----------------------------------
-            // Validate quantity
-            // ----------------------------------
-
-            if (
-              !Number.isFinite(
-                totalQuantity
-              ) ||
-              totalQuantity < 1
-            ) {
-
-              throw new Error(
-                'INVALID_QUANTITY'
-              );
-
-            }
-
-
-            // ----------------------------------
-            // Check latest availability
-            // ----------------------------------
-
-            if (
-              !Number.isFinite(
-                currentAvailable
-              ) ||
-              currentAvailable <= 0
-            ) {
-
-              throw new Error(
-                'NO_COPIES_AVAILABLE'
-              );
-
-            }
-
-
-            const newAvailableQuantity =
-              currentAvailable - 1;
-
-
-            // ----------------------------------
-            // Save reservation
-            // ----------------------------------
-
-            transaction.set(
-              reservationsCollection.doc(
-                reservationId
-              ),
-              reservation
-            );
-
-
-            // ----------------------------------
-            // Update item quantity
-            // ----------------------------------
-
-            transaction.update(
-              transactionItemRef,
-              {
-
-                quantity:
-                  totalQuantity,
-
-                availableQuantity:
-                  newAvailableQuantity,
-
-                // Keep status for compatibility
-                status:
-                  newAvailableQuantity === 0
-                    ? 'borrowed'
-                    : 'available'
-
-              }
-            );
-
+          if (!updatedBook) {
+            return res.status(409).json({
+              message:
+                'No copies of this book are currently available. Please join the waitlist.'
+            });
           }
-        );
 
+          if (updatedBook.availableQuantity === 0 && updatedBook.status === 'available') {
+            await Book.updateOne({ id: item.id }, { $set: { status: 'borrowed' } });
+          }
+
+          // Save reservation in Firestore
+          await reservationsCollection
+            .doc(reservationId)
+            .set(reservation);
+        } else {
+          await firestore.runTransaction(
+            async transaction => {
+              const transactionItemRef =
+                itemsCollection.doc(
+                  item.id
+                );
+
+              const latestItemDoc =
+                await transaction.get(
+                  transactionItemRef
+                );
+
+              if (
+                !latestItemDoc.exists
+              ) {
+                throw new Error(
+                  'Item not found'
+                );
+              }
+
+              const latestItem =
+                latestItemDoc.data();
+
+              const totalQuantity =
+                Number(
+                  latestItem.quantity ??
+                  1
+                );
+
+              const currentAvailable =
+                Number(
+                  latestItem.availableQuantity ??
+                  totalQuantity
+                );
+
+              if (
+                !Number.isFinite(
+                  totalQuantity
+                ) ||
+                totalQuantity < 1
+              ) {
+                throw new Error(
+                  'INVALID_QUANTITY'
+                );
+              }
+
+              if (
+                !Number.isFinite(
+                  currentAvailable
+                ) ||
+                currentAvailable <= 0
+              ) {
+                throw new Error(
+                  'NO_COPIES_AVAILABLE'
+                );
+              }
+
+              const newAvailableQuantity =
+                currentAvailable - 1;
+
+              transaction.set(
+                reservationsCollection.doc(
+                  reservationId
+                ),
+                reservation
+              );
+
+              transaction.update(
+                transactionItemRef,
+                {
+                  quantity:
+                    totalQuantity,
+                  availableQuantity:
+                    newAvailableQuantity,
+                  status:
+                    newAvailableQuantity === 0
+                      ? 'borrowed'
+                      : 'available'
+                }
+              );
+            }
+          );
+        }
       }
 
 
@@ -963,32 +949,17 @@ router.post(
       // Get item
       // ----------------------------------------
 
-      const itemDoc =
-        await itemsCollection
-          .doc(
-            reservation.itemId
-          )
-          .get();
+      const item =
+        await findItemById(
+          reservation.itemId
+        );
 
-
-      if (
-        !itemDoc.exists
-      ) {
-
+      if (!item) {
         return res.status(404).json({
           message:
             'Item associated with this reservation was not found'
         });
-
       }
-
-
-      const item = {
-        id:
-          itemDoc.id,
-
-        ...itemDoc.data()
-      };
 
 
       const returnedAt =
@@ -1084,89 +1055,94 @@ router.post(
       //
       // ========================================
 
-      if (
-        item.type === 'book'
-      ) {
+      if (item.type === 'book') {
+        if (mongoose.connection.readyState === 1) {
+          const bookDoc = await Book.findOne({ id: item.id });
+          if (bookDoc) {
+            const totalQty = Math.max(1, Number(bookDoc.quantity ?? 1));
+            const curAvail = Math.max(0, Number(bookDoc.availableQuantity ?? 0));
+            const newAvail = Math.min(totalQty, curAvail + 1);
+            const newStatus = newAvail > 0
+              ? (bookDoc.status === 'maintenance' ? 'maintenance' : 'available')
+              : 'borrowed';
+            const newCondition = conditionRating != null ? Number(conditionRating) : bookDoc.conditionRating;
 
-        await firestore.runTransaction(
-          async transaction => {
-
-            const transactionItemRef =
-              itemsCollection.doc(
-                item.id
-              );
-
-
-            const latestItemDoc =
-              await transaction.get(
-                transactionItemRef
-              );
-
-
-            if (
-              !latestItemDoc.exists
-            ) {
-
-              throw new Error(
-                'RETURN_ITEM_NOT_FOUND'
-              );
-
-            }
-
-
-            const latestItem =
-              latestItemDoc.data();
-
-
-            const totalQuantity =
-              Number(
-                latestItem.quantity ??
-                1
-              );
-
-
-            const currentAvailable =
-              Number(
-                latestItem.availableQuantity ??
-                0
-              );
-
-
-            const newAvailableQuantity =
-              Math.min(
-                totalQuantity,
-                currentAvailable + 1
-              );
-
-
-            transaction.update(
-              transactionItemRef,
+            await Book.updateOne(
+              { id: item.id },
               {
-
-                quantity:
-                  totalQuantity,
-
-                availableQuantity:
-                  newAvailableQuantity,
-
-                status:
-                  newAvailableQuantity > 0
-                    ? 'available'
-                    : 'borrowed',
-
-                conditionRating:
-                  conditionRating != null
-                    ? Number(
-                        conditionRating
-                      )
-                    : latestItem.conditionRating
-
+                $set: {
+                  availableQuantity: newAvail,
+                  status: newStatus,
+                  conditionRating: newCondition,
+                  updatedAt: new Date().toISOString()
+                }
               }
             );
-
           }
-        );
+        } else {
+          await firestore.runTransaction(
+            async transaction => {
+              const transactionItemRef =
+                itemsCollection.doc(
+                  item.id
+                );
 
+              const latestItemDoc =
+                await transaction.get(
+                  transactionItemRef
+                );
+
+              if (
+                !latestItemDoc.exists
+              ) {
+                throw new Error(
+                  'RETURN_ITEM_NOT_FOUND'
+                );
+              }
+
+              const latestItem =
+                latestItemDoc.data();
+
+              const totalQuantity =
+                Number(
+                  latestItem.quantity ??
+                  1
+                );
+
+              const currentAvailable =
+                Number(
+                  latestItem.availableQuantity ??
+                  0
+                );
+
+              const newAvailableQuantity =
+                Math.min(
+                  totalQuantity,
+                  currentAvailable + 1
+                );
+
+              transaction.update(
+                transactionItemRef,
+                {
+                  quantity:
+                    totalQuantity,
+                  availableQuantity:
+                    newAvailableQuantity,
+                  status:
+                    newAvailableQuantity > 0
+                      ? 'available'
+                      : 'borrowed',
+                  conditionRating:
+                    conditionRating != null
+                      ? Number(
+                          conditionRating
+                        )
+                      : latestItem.conditionRating
+                }
+              );
+            }
+          );
+        }
       }
 
       else {
@@ -1491,168 +1467,146 @@ router.post(
       // GET ITEM
       // ========================================
 
-      const itemDoc =
-        await itemsCollection
-          .doc(
-            reservation.itemId
-          )
-          .get();
+      const item =
+        await findItemById(
+          reservation.itemId
+        );
 
-
-      if (
-        !itemDoc.exists
-      ) {
-
+      if (!item) {
         return res.status(404).json({
           message:
             'Item associated with this reservation was not found'
         });
-
       }
-
-
-      const item =
-        itemDoc.data();
 
 
       // ========================================
       // CANCEL RESERVATION + RESTORE QUANTITY
       // ========================================
 
-      if (
-        item.type === 'book'
-      ) {
+      if (item.type === 'book') {
+        if (mongoose.connection.readyState === 1) {
+          await reservationsCollection
+            .doc(reservation.id)
+            .update({
+              status: 'cancelled',
+              cancelledAt: new Date().toISOString()
+            });
 
-        await firestore.runTransaction(
-          async transaction => {
-
-            const reservationRef =
-              reservationsCollection
-                .doc(
-                  reservation.id
-                );
-
-
-            const itemRef =
-              itemsCollection
-                .doc(
-                  reservation.itemId
-                );
-
-
-            const latestReservationDoc =
-              await transaction.get(
-                reservationRef
-              );
-
-
-            if (
-              !latestReservationDoc.exists
-            ) {
-
-              throw new Error(
-                'RESERVATION_NOT_FOUND'
-              );
-
-            }
-
-
-            const latestReservation =
-              latestReservationDoc.data();
-
-
-            if (
-              latestReservation.status !==
-              'active'
-            ) {
-
-              throw new Error(
-                'RESERVATION_NOT_ACTIVE'
-              );
-
-            }
-
-
-            const latestItemDoc =
-              await transaction.get(
-                itemRef
-              );
-
-
-            if (
-              !latestItemDoc.exists
-            ) {
-
-              throw new Error(
-                'ITEM_NOT_FOUND'
-              );
-
-            }
-
-
-            const latestItem =
-              latestItemDoc.data();
-
-
-            const totalQuantity =
-              Number(
-                latestItem.quantity ??
-                1
-              );
-
-
-            const currentAvailable =
-              Number(
-                latestItem.availableQuantity ??
-                0
-              );
-
-
-            const newAvailableQuantity =
-              Math.min(
-                totalQuantity,
-                currentAvailable + 1
-              );
-
-
-            // ----------------------------------
-            // Cancel reservation
-            // ----------------------------------
-
-            transaction.update(
-              reservationRef,
+          const bookDoc = await Book.findOne({ id: reservation.itemId });
+          if (bookDoc) {
+            const totalQty = Math.max(1, Number(bookDoc.quantity ?? 1));
+            const curAvail = Math.max(0, Number(bookDoc.availableQuantity ?? 0));
+            const newAvail = Math.min(totalQty, curAvail + 1);
+            await Book.updateOne(
+              { id: reservation.itemId },
               {
-                status:
-                  'cancelled'
+                $set: {
+                  availableQuantity: newAvail,
+                  status: 'available',
+                  updatedAt: new Date().toISOString()
+                }
               }
             );
-
-
-            // ----------------------------------
-            // Restore book copy
-            // ----------------------------------
-
-            transaction.update(
-              itemRef,
-              {
-
-                quantity:
-                  totalQuantity,
-
-                availableQuantity:
-                  newAvailableQuantity,
-
-                status:
-                  newAvailableQuantity > 0
-                    ? 'available'
-                    : 'borrowed'
-
-              }
-            );
-
           }
-        );
+        } else {
+          await firestore.runTransaction(
+            async transaction => {
+              const reservationRef =
+                reservationsCollection
+                  .doc(
+                    reservation.id
+                  );
 
+              const itemRef =
+                itemsCollection
+                  .doc(
+                    reservation.itemId
+                  );
+
+              const latestReservationDoc =
+                await transaction.get(
+                  reservationRef
+                );
+
+              if (
+                !latestReservationDoc.exists
+              ) {
+                throw new Error(
+                  'RESERVATION_NOT_FOUND'
+                );
+              }
+
+              const latestReservation =
+                latestReservationDoc.data();
+
+              if (
+                latestReservation.status !==
+                'active'
+              ) {
+                throw new Error(
+                  'RESERVATION_NOT_ACTIVE'
+                );
+              }
+
+              const latestItemDoc =
+                await transaction.get(
+                  itemRef
+                );
+
+              if (
+                !latestItemDoc.exists
+              ) {
+                throw new Error(
+                  'ITEM_NOT_FOUND'
+                );
+              }
+
+              const latestItem =
+                latestItemDoc.data();
+
+              const totalQuantity =
+                Number(
+                  latestItem.quantity ??
+                  1
+                );
+
+              const currentAvailable =
+                Number(
+                  latestItem.availableQuantity ??
+                  0
+                );
+
+              const newAvailableQuantity =
+                Math.min(
+                  totalQuantity,
+                  currentAvailable + 1
+                );
+
+              transaction.update(
+                reservationRef,
+                {
+                  status:
+                    'cancelled'
+                }
+              );
+
+              transaction.update(
+                itemRef,
+                {
+                  quantity:
+                    totalQuantity,
+                  availableQuantity:
+                    newAvailableQuantity,
+                  status:
+                    newAvailableQuantity > 0
+                      ? 'available'
+                      : 'borrowed'
+                }
+              );
+            }
+          );
+        }
       }
 
       else {

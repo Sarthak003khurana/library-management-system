@@ -53,6 +53,8 @@ const {
 
 const multer = require('multer');
 const eventHub = require('../utils/eventEmitter');
+const { mongoose } = require('../mongodb');
+const Book = require('../models/Book');
 
 const router = express.Router();
 
@@ -192,37 +194,49 @@ router.get(
 
 
       // ----------------------------------------
-      // Get all items
+      // Get all items from MongoDB (books) and/or Firestore (equipment/fallback)
       // ----------------------------------------
+      let rawDocs = [];
 
-      const snapshot =
-        await itemsCollection.get();
+      if (mongoose.connection.readyState === 1) {
+        let mongoFilter = {};
+        if (type && type !== 'all') {
+          mongoFilter.type = type;
+        }
 
+        const books = await Book.find(mongoFilter).lean();
+        const formattedBooks = books.map(b => {
+          const { _id, ...rest } = b;
+          return { id: b.id, ...rest };
+        });
 
-      let items =
-        snapshot.docs.map(
-          doc => {
-
-            const item =
-              doc.data();
-
-            const {
-              quantity,
-              availableQuantity
-            } =
-              getItemQuantity(item);
-
-
-            return {
-              ...item,
-
-              quantity,
-
-              availableQuantity
-            };
-
+        if (type === 'equipment') {
+          const equipSnap = await itemsCollection.where('type', '==', 'equipment').get();
+          rawDocs = equipSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        } else if (type === 'book') {
+          rawDocs = formattedBooks;
+        } else {
+          try {
+            const equipSnap = await itemsCollection.where('type', '==', 'equipment').get();
+            const equip = equipSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            rawDocs = [...formattedBooks, ...equip];
+          } catch {
+            rawDocs = formattedBooks;
           }
-        );
+        }
+      } else {
+        const snapshot = await itemsCollection.get();
+        rawDocs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      }
+
+      let items = rawDocs.map(doc => {
+        const { quantity, availableQuantity } = getItemQuantity(doc);
+        return {
+          ...doc,
+          quantity,
+          availableQuantity
+        };
+      });
 
 
       // ----------------------------------------
@@ -355,8 +369,24 @@ router.get(
   requireAuth,
   async (req, res) => {
     try {
-      const snapshot = await itemsCollection.get();
-      const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      let items = [];
+      if (mongoose.connection.readyState === 1) {
+        const books = await Book.find().lean();
+        const formattedBooks = books.map(b => {
+          const { _id, ...rest } = b;
+          return { id: b.id, ...rest };
+        });
+        try {
+          const equipSnap = await itemsCollection.where('type', '==', 'equipment').get();
+          const equip = equipSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+          items = [...formattedBooks, ...equip];
+        } catch {
+          items = formattedBooks;
+        }
+      } else {
+        const snapshot = await itemsCollection.get();
+        items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      }
 
       res.setHeader('Content-Type', 'text/csv; charset=utf-8');
       res.setHeader('Content-Disposition', 'attachment; filename="resourcehub-catalog.csv"');
@@ -439,27 +469,28 @@ router.get(
   async (req, res) => {
 
     try {
+      let item = null;
 
-      const itemSnapshot =
-        await itemsCollection
-          .doc(req.params.id)
-          .get();
-
-
-      if (
-        !itemSnapshot.exists
-      ) {
-
-        return res.status(404).json({
-          message:
-            'Item not found'
-        });
-
+      if (mongoose.connection.readyState === 1) {
+        const book = await Book.findOne({ id: req.params.id }).lean();
+        if (book) {
+          const { _id, ...rest } = book;
+          item = { id: book.id, ...rest };
+        }
       }
 
+      if (!item) {
+        const itemSnapshot = await itemsCollection.doc(req.params.id).get();
+        if (itemSnapshot.exists) {
+          item = { id: itemSnapshot.id, ...itemSnapshot.data() };
+        }
+      }
 
-      const item =
-        itemSnapshot.data();
+      if (!item) {
+        return res.status(404).json({
+          message: 'Item not found'
+        });
+      }
 
 
       const {
@@ -739,12 +770,16 @@ router.post(
 
 
       // ----------------------------------------
-      // Store in Firestore
+      // Store in MongoDB (books) or Firestore (equipment / fallback)
       // ----------------------------------------
 
-      await itemsCollection
-        .doc(item.id)
-        .set(item);
+      if (item.type === 'book' && mongoose.connection.readyState === 1) {
+        await Book.create(item);
+      } else {
+        await itemsCollection
+          .doc(item.id)
+          .set(item);
+      }
 
 
       console.log(
@@ -806,30 +841,32 @@ router.put(
   async (req, res) => {
 
     try {
+      let existingItem = null;
+      let isMongoBook = false;
 
-      const itemRef =
-        itemsCollection
-          .doc(req.params.id);
-
-
-      const itemSnapshot =
-        await itemRef.get();
-
-
-      if (
-        !itemSnapshot.exists
-      ) {
-
-        return res.status(404).json({
-          message:
-            'Item not found'
-        });
-
+      if (mongoose.connection.readyState === 1) {
+        const mongoBook = await Book.findOne({ id: req.params.id }).lean();
+        if (mongoBook) {
+          const { _id, ...rest } = mongoBook;
+          existingItem = { id: mongoBook.id, ...rest };
+          isMongoBook = true;
+        }
       }
 
+      const itemRef = itemsCollection.doc(req.params.id);
 
-      const existingItem =
-        itemSnapshot.data();
+      if (!existingItem) {
+        const itemSnapshot = await itemRef.get();
+        if (itemSnapshot.exists) {
+          existingItem = itemSnapshot.data();
+        }
+      }
+
+      if (!existingItem) {
+        return res.status(404).json({
+          message: 'Item not found'
+        });
+      }
 
 
       // ----------------------------------------
@@ -1044,9 +1081,13 @@ router.put(
       // Store updated item
       // ----------------------------------------
 
-      await itemRef.set(
-        updatedItem
-      );
+      if (isMongoBook && mongoose.connection.readyState === 1) {
+        await Book.findOneAndUpdate({ id: req.params.id }, updatedItem, { new: true });
+      } else {
+        await itemRef.set(
+          updatedItem
+        );
+      }
 
 
       console.log(
@@ -1095,28 +1136,29 @@ router.delete(
 
     try {
 
-      const itemRef =
-        itemsCollection
-          .doc(req.params.id);
+      let found = false;
 
-
-      const itemSnapshot =
-        await itemRef.get();
-
-
-      if (
-        !itemSnapshot.exists
-      ) {
-
-        return res.status(404).json({
-          message:
-            'Item not found'
-        });
-
+      if (mongoose.connection.readyState === 1) {
+        const deleted = await Book.findOneAndDelete({ id: req.params.id });
+        if (deleted) {
+          found = true;
+        }
       }
 
+      if (!found) {
+        const itemRef = itemsCollection.doc(req.params.id);
+        const itemSnapshot = await itemRef.get();
+        if (itemSnapshot.exists) {
+          await itemRef.delete();
+          found = true;
+        }
+      }
 
-      await itemRef.delete();
+      if (!found) {
+        return res.status(404).json({
+          message: 'Item not found'
+        });
+      }
 
 
       console.log(
@@ -1428,27 +1470,44 @@ router.post(
         };
 
 
-        const itemRef =
-          itemsCollection
-            .doc(item.id);
-
-
-        batch.set(
-          itemRef,
-          item
-        );
-
-
         created.push(item);
 
       }
 
 
       // ========================================
-      // COMMIT
+      // COMMIT (MONGODB FOR BOOKS, FIRESTORE FOR EQUIPMENT)
       // ========================================
 
-      await batch.commit();
+      if (mongoose.connection.readyState === 1) {
+        const mongoOps = [];
+        const firestoreBatch = firestore.batch();
+        let firestoreCount = 0;
+
+        for (const it of created) {
+          if (it.type === 'book') {
+            mongoOps.push({
+              updateOne: {
+                filter: { id: it.id },
+                update: { $setOnInsert: it },
+                upsert: true
+              }
+            });
+          } else {
+            firestoreBatch.set(itemsCollection.doc(it.id), it);
+            firestoreCount++;
+          }
+        }
+
+        if (mongoOps.length > 0) {
+          await Book.bulkWrite(mongoOps, { ordered: false });
+        }
+        if (firestoreCount > 0) {
+          await firestoreBatch.commit();
+        }
+      } else {
+        await batch.commit();
+      }
 
 
       console.log(
@@ -1553,13 +1612,38 @@ router.post(
           conditionRating: 10,
           createdAt: new Date().toISOString()
         };
-
-        const itemRef = itemsCollection.doc(item.id);
-        batch.set(itemRef, item);
         created.push(item);
       }
 
-      await batch.commit();
+      if (mongoose.connection.readyState === 1) {
+        const mongoOps = [];
+        const firestoreBatch = firestore.batch();
+        let firestoreCount = 0;
+
+        for (const it of created) {
+          if (it.type === 'book') {
+            mongoOps.push({
+              updateOne: {
+                filter: { id: it.id },
+                update: { $setOnInsert: it },
+                upsert: true
+              }
+            });
+          } else {
+            firestoreBatch.set(itemsCollection.doc(it.id), it);
+            firestoreCount++;
+          }
+        }
+
+        if (mongoOps.length > 0) {
+          await Book.bulkWrite(mongoOps, { ordered: false });
+        }
+        if (firestoreCount > 0) {
+          await firestoreBatch.commit();
+        }
+      } else {
+        await batch.commit();
+      }
 
       eventHub.emit('audit:log', {
         action: 'ITEMS_BULK_IMPORTED_FILE',
@@ -1574,6 +1658,31 @@ router.post(
     } catch (err) {
       console.error('File bulk import error:', err);
       return res.status(500).json({ message: err.message || 'File import failed' });
+    }
+  }
+);
+
+
+// ============================================
+// ADMIN MIGRATION TRIGGER (PROTECTED)
+// Allows admin to run or verify Firestore -> MongoDB migration
+// ============================================
+
+router.post(
+  '/migration/run',
+  requireAuth,
+  allowRoles(...ADMIN_ROLES),
+  async (req, res) => {
+    try {
+      const { execute } = req.body || {};
+      const { runMigration } = require('../migrate-books-to-mongo');
+      const report = await runMigration({ isExecute: Boolean(execute) });
+      return res.json(report);
+    } catch (err) {
+      return res.status(500).json({
+        message: 'Migration execution error',
+        error: err.message
+      });
     }
   }
 );

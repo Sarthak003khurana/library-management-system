@@ -20,6 +20,8 @@
 // ============================================
 
 const admin = require('firebase-admin');
+const { mongoose } = require('./mongodb');
+const Book = require('./models/Book');
 
 // Initialize Firebase Admin
 require('./firebase');
@@ -47,6 +49,20 @@ const db = {
   // ------------------------------------------
 
   async get(collection) {
+    if (collection === 'items' && mongoose.connection.readyState === 1) {
+      const books = await Book.find().lean();
+      const formattedBooks = books.map(b => {
+        const { _id, ...rest } = b;
+        return { id: b.id, ...rest };
+      });
+      try {
+        const equipSnapshot = await collectionRef('items').where('type', '==', 'equipment').get();
+        const equipment = equipSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        return [...formattedBooks, ...equipment];
+      } catch {
+        return formattedBooks;
+      }
+    }
 
     const snapshot =
       await collectionRef(collection).get();
@@ -89,6 +105,13 @@ const db = {
   // ------------------------------------------
 
   async findById(collection, id) {
+    if (collection === 'items' && mongoose.connection.readyState === 1) {
+      const book = await Book.findOne({ id }).lean();
+      if (book) {
+        const { _id, ...rest } = book;
+        return { id: book.id, ...rest };
+      }
+    }
 
     const doc =
       await collectionRef(collection)

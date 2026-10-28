@@ -37,7 +37,7 @@ router.get('/status', (req, res) => {
     status,
     instructions: status.isConnected
       ? 'MongoDB Atlas is active. You can execute CRUD and .populate() requests.'
-      : 'To activate, add MONGO_URI="mongodb+srv://<user>:<password>@cluster.mongodb.net/resourcehub" to .env.'
+      : 'To activate, configure MONGODB_URI in server environment variables.'
   });
 });
 

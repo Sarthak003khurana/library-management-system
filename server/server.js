@@ -26,8 +26,17 @@ const mongoDemoRoutes = require('./routes/mongoDemo');
 
 const app = express();
 
-// Initialize isolated MongoDB demo if MONGO_URI is configured
-initMongoDB();
+// Initialize MongoDB Atlas connection if MONGODB_URI is configured
+initMongoDB().then(async (status) => {
+  if (status && status.isConnected) {
+    try {
+      const { ensureBooksMigrated } = require('./migrate-books-to-mongo');
+      await ensureBooksMigrated();
+    } catch (err) {
+      console.warn('Startup migration check notice:', err.message);
+    }
+  }
+});
 
 // Render provides process.env.PORT.
 // 5000 is used when running locally.
