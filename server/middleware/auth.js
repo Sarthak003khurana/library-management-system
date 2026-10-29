@@ -3,7 +3,7 @@
 // JWT verification + Role-Based Access Control
 // ============================================
 
-const jwt = require('jsonwebtoken');
+
 
 if (process.env.NODE_ENV === 'production' && !process.env.JWT_SECRET) {
   console.error('FATAL: JWT_SECRET environment variable is missing in production!');
