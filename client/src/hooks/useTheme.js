@@ -1,4 +1,4 @@
-
+import { useState, useEffect } from 'react';
 import { Storage } from '../utils/storage.js';
 
 export function useTheme() {
